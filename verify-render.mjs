@@ -7,8 +7,8 @@
 //     --format=esm --outfile=render.bundle.mjs --external:react --external:react-dom \
 //     && node render.bundle.mjs && rm render.bundle.mjs
 //
-// It resolves the three client programs as sibling directories of this repo
-// (../Juha-PTapp etc.), matching the C:\Users\elojuh\CodeDev\ layout.
+// Programs and logs both come from ./fixtures, so it depends on nothing
+// outside this repo.
 
 import fs from "fs";
 import React from "react";
@@ -19,17 +19,12 @@ import { Adherence, DayCard } from "./src/app.jsx";
 const ID={juha:"1da21dd7-5f90-423b-ba6c-bf8dc3dd8dee",henna:"5b757e16-813a-46f6-be67-423ff3b093cc",joonatan:"47ba0f5b-9844-4a24-81ca-f561a7b2fc9d"};
 const read=p=>JSON.parse(fs.readFileSync("./fixtures/"+p,"utf8"));
 const rows=o=>Object.keys(o).sort().map(day=>({day,payload:o[day]}));
-const J=(await import("../Juha-PTapp/src/core/program-juha.js")).default;
-const H=(await import("../Henna-PTapp/src/core/program-henna.js")).default;
-const N=(await import("../Joonatan-PTapp/src/core/program-joonatan.js")).default;
-const st=p=>JSON.parse(JSON.stringify(p));
+const programs=read("programs.json");
+
 const roster=[{id:ID.juha,name:"Juha"},{id:ID.henna,name:"Henna"},{id:ID.joonatan,name:"Joonatan"},{id:"ghost",name:"Ghost"}];
 const logs={[ID.juha]:rows(read("logs-juha.json")),[ID.henna]:rows(read("logs-henna.json")),[ID.joonatan]:rows(read("logs-joonatan.json")),ghost:[{day:"2026-09-01",payload:{done:{}}}]};
 const ov={[ID.juha]:rows(read("overrides-juha.json")),[ID.joonatan]:rows(read("overrides-joonatan.json"))};
-const programs=[
- {id:"juha-2026-09",name:"Juha — September 2026",owner_id:ID.juha,assigned_to:ID.juha,effective_from:"-infinity",definition:st(J)},
- {id:"henna-2026-09",name:"Henna — September 2026",owner_id:ID.juha,assigned_to:ID.henna,effective_from:"-infinity",definition:st(H)},
- {id:"joonatan-2026-09",name:"Joonatan — September 2026",owner_id:ID.juha,assigned_to:ID.joonatan,effective_from:"-infinity",definition:st(N)}];
+
 const a=buildAllAdherence(roster,logs,ov,programs);
 let bad=0;
 for(const p of roster){

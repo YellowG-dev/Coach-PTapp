@@ -12,6 +12,7 @@
 
 import fs from "fs";
 import assert from "assert";
+import crypto from "crypto";
 import {
   indexByDay,
   groupPrograms,
@@ -22,9 +23,16 @@ import {
   pctLabel,
 } from "./src/core/adherence.js";
 
-import JUHA from "../verify/juha/core/program-juha.js";
-import HENNA from "../verify/henna/core/program-henna.js";
-import JOONATAN from "../verify/joonatan/core/program-joonatan.js";
+import { collectProgramIds } from "./src/core/validate-program.js";
+
+// Programs come from ./fixtures/programs.json, not from the client repos.
+// An earlier draft imported ../Juha-PTapp/src/core/program-juha.js and friends,
+// which made this script depend on where the sibling repos happen to sit on
+// disk — it failed outright on a machine whose folders are named differently.
+// The fixture is the JSON round-trip of those three files, which is exactly
+// what Supabase stores in `programs.definition`. Drift between the fixture and
+// the repos is caught by the fingerprint check below, so making it standalone
+// costs no fidelity.
 
 let checks = 0;
 let failures = 0;
@@ -59,16 +67,9 @@ const overrides = {
   [ID.joonatan]: toRows(readJson("./fixtures/overrides-joonatan.json")),
 };
 
-// Round-tripped through JSON on purpose: this is what arrives from Supabase
-// as `definition` jsonb, and Phase 3 exists so that it is identical to the
-// object the client app imports.
+const programRows = readJson("./fixtures/programs.json");
+const byId = Object.fromEntries(programRows.map((r) => [r.id, r]));
 const asStored = (p) => JSON.parse(JSON.stringify(p));
-
-const programRows = [
-  { id: "juha-2026-09", name: "Juha — September 2026", assigned_to: ID.juha, effective_from: "-infinity", definition: asStored(JUHA) },
-  { id: "henna-2026-09", name: "Henna — September 2026", assigned_to: ID.henna, effective_from: "-infinity", definition: asStored(HENNA) },
-  { id: "joonatan-2026-09", name: "Joonatan — September 2026", assigned_to: ID.joonatan, effective_from: "-infinity", definition: asStored(JOONATAN) },
-];
 
 const roster = [
   { id: ID.juha, name: "Juha", isSelf: true },
@@ -231,7 +232,7 @@ const { buildHistoryRows } = await import("./src/core/engine.js");
 check("per-day figures are byte-for-byte what buildHistoryRows returns", () => {
   const log = indexByDay(logs[ID.juha]);
   const ov = indexByDay(overrides[ID.juha]);
-  const direct = buildHistoryRows(log, ov, asStored(JUHA));
+  const direct = buildHistoryRows(log, ov, byId["juha-2026-09"].definition);
   const mine = all[ID.juha].days;
   assert.strictEqual(direct.length, mine.length);
   for (const row of direct) {
@@ -240,6 +241,31 @@ check("per-day figures are byte-for-byte what buildHistoryRows returns", () => {
     assert.strictEqual(m.doneCount, row.doneCount, row.date + " doneCount");
   }
 });
+
+/* ------------------- 4b. Fixture fidelity (drift guard) ------------------ */
+
+// The fixture is only trustworthy while it still matches the programs actually
+// in the repos and in Supabase. These md5s are over the sorted set of every ID
+// in each program, the same fingerprint recorded when the programs were loaded
+// into Supabase on 20 Sep 2026. If a program is edited and the fixture is not
+// regenerated, this fails rather than silently scoring against a stale plan.
+console.log("\nFixture fidelity");
+const FINGERPRINTS = {
+  "juha-2026-09": { ids: 92, md5: "1b0dc3e86440b260ec34282c78727973" },
+  "henna-2026-09": { ids: 44, md5: "e711a3d8d20db6feabddd2201318e848" },
+  "joonatan-2026-09": { ids: 40, md5: "6fc84d22e7cb6dede57079bc608cf89f" },
+};
+for (const [id, expected] of Object.entries(FINGERPRINTS)) {
+  check(`${id} still matches the fingerprint recorded at load time`, () => {
+    const ids = [...collectProgramIds(byId[id].definition).keys()].sort();
+    assert.strictEqual(ids.length, expected.ids, "ID count changed");
+    assert.strictEqual(
+      crypto.createHash("md5").update(ids.join(",")).digest("hex"),
+      expected.md5,
+      "program has changed — regenerate fixtures/programs.json"
+    );
+  });
+}
 
 /* --------------------- 5. Rules of Hooks (structural) -------------------- */
 
