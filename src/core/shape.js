@@ -60,6 +60,11 @@ export function unitFor(id) {
   return UNITS[id] || "";
 }
 
+/** The one classification that holds across all three clients' programs. */
+export function isDailyCheck(id) {
+  return String(id).startsWith("chk-");
+}
+
 /**
  * Split a loads key into its base exercise and, if present, the substituted
  * movement. The client apps store a substitution's sets under
@@ -136,14 +141,27 @@ export function shapeDay(payload) {
     .sort((a, b) => a.id.localeCompare(b.id));
 
   // --- everything else that was ticked, that isn't already shown above ---
+  //
+  // These IDs cannot be resolved to names until programs live in Supabase
+  // (Phase 5), but one thing *is* knowable now: the "chk-" prefix marks a
+  // daily habit check across all three clients. Everything else is an
+  // exercise the person completed without recording loads. Lumping the two
+  // together makes a six-exercise session read as one exercise plus noise,
+  // so they are separated on the only evidence available rather than guessed.
   const shown = new Set(exercises.map((e) => e.id));
-  const checked = [];
+  const checks = [];
+  const ticked = [];
   const unchecked = [];
   Object.keys(done).forEach((id) => {
     if (shown.has(id)) return;
-    (done[id] ? checked : unchecked).push(id);
+    if (!done[id]) {
+      unchecked.push(id);
+      return;
+    }
+    (isDailyCheck(id) ? checks : ticked).push(id);
   });
-  checked.sort();
+  checks.sort();
+  ticked.sort();
   unchecked.sort();
 
   // --- measurements: new-style `numbers` plus the older loose scalars ---
@@ -184,7 +202,8 @@ export function shapeDay(payload) {
   // claim "nothing was recorded" while also listing what was left unticked.
   const isEmpty =
     exercises.length === 0 &&
-    checked.length === 0 &&
+    checks.length === 0 &&
+    ticked.length === 0 &&
     unchecked.length === 0 &&
     measurements.length === 0 &&
     ratings.length === 0 &&
@@ -193,7 +212,8 @@ export function shapeDay(payload) {
 
   return {
     exercises,
-    checked,
+    checks,
+    ticked,
     unchecked,
     measurements,
     ratings,

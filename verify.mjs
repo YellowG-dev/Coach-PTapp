@@ -69,7 +69,8 @@ const lg6 = j.exercises.find((e) => e.id === "lg-6");
 check("lg-6 substitution reason", lg6.sub.reason, "equipment");
 check("lg-1 drops empty trailing sets", formatSets(j.exercises.find((e) => e.id === "lg-1").sets), "70×8, 70×8");
 check("lg-5 note carried", j.exercises.find((e) => e.id === "lg-5").note, "60kg next nime");
-check("checklist items not mixed into exercises", j.checked, ["chk-walk", "chk-water"]);
+check("daily checks identified by prefix", j.checks, ["chk-walk", "chk-water"]);
+check("no bare exercise IDs left ticked here (all six had sets or subs)", j.ticked, []);
 check("weigh-in read from numbers", j.measurements.find((m) => m.id === "chk-weigh").value, 59.5);
 check("nothing unrecognised", j.unknown, null);
 
@@ -84,7 +85,7 @@ check("mob-1 not shown as exercise (no sets)", Boolean(u.exercises.find((e) => e
 
 console.log("\n--- sparse and legacy rows ---");
 const h = shapeDay(HENNA_0908);
-check("Henna: six opaque IDs ticked", h.checked.length, 6);
+check("Henna: six opaque IDs ticked, none are daily checks", [h.ticked.length, h.checks.length], [6, 0]);
 check("Henna: energy rating", h.ratings.find((r) => r.id === "energy").value, 2);
 check("Henna: day not treated as empty", h.isEmpty, false);
 const j12 = shapeDay(JOONATAN_0912);
@@ -97,6 +98,18 @@ check("legacy loose weight surfaced", L.measurements.find((m) => m.id === "weigh
 check("legacy string knee surfaced", L.ratings.find((r) => r.id === "knee").value, "mild");
 check("legacy deload maps to gentler", L.gentler, true);
 check("unrecognised key preserved, not dropped", L.unknown, { mystery: { foo: 1 } });
+
+console.log("\n--- ticked-without-sets vs daily checks ---");
+const JOONATAN_0908 = {
+  done: { "fb-1": true, "fb-2": true, "fb-3": true, "fb-4": true, "fb-5": true, "fb-6": true, "chk-walk": true },
+  loads: { "fb-3": [{ r: 10, w: 50 }, { r: 10, w: 50 }, { r: 10, w: 50 }] },
+  gentler: false,
+  numbers: { "chk-sleep": 8 },
+};
+const j8 = shapeDay(JOONATAN_0908);
+check("fb-3 has sets, shown as an exercise", j8.exercises.map((e) => e.id), ["fb-3"]);
+check("the other five exercises are NOT filed as daily checks", j8.ticked, ["fb-1", "fb-2", "fb-4", "fb-5", "fb-6"]);
+check("only chk- items are daily checks", j8.checks, ["chk-walk"]);
 
 console.log("\n--- schedule overrides ---");
 OVERRIDES.forEach(([name, payload]) => {

@@ -336,10 +336,22 @@ function DayCard({ day }) {
           </Group>
         )}
 
-        {shaped && shaped.checked.length > 0 && (
-          <Group title="Also ticked">
+        {shaped && shaped.ticked.length > 0 && (
+          <Group title="Ticked, no sets logged">
             <div className="flex gap-1.5 flex-wrap">
-              {shaped.checked.map((id) => (
+              {shaped.ticked.map((id) => (
+                <Tag key={id} mono>
+                  {labelFor(id)}
+                </Tag>
+              ))}
+            </div>
+          </Group>
+        )}
+
+        {shaped && shaped.checks.length > 0 && (
+          <Group title="Daily checks">
+            <div className="flex gap-1.5 flex-wrap">
+              {shaped.checks.map((id) => (
                 <Tag key={id} mono>
                   {labelFor(id)}
                 </Tag>
@@ -482,8 +494,10 @@ function Group({ title, children }) {
 }
 
 function Pairs({ items }) {
+  // A lone value in a two-column grid leaves its number stranded mid-row.
+  const cols = items.length > 1 ? "grid-cols-2" : "grid-cols-1";
   return (
-    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+    <div className={`grid ${cols} gap-x-4 gap-y-1`}>
       {items.map((i) => (
         <Row key={i.key} left={i.label} right={i.value} />
       ))}
