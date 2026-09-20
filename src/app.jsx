@@ -10,6 +10,7 @@ import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from 
 import { loadAll } from "./core/data.js";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
+import { buildNameMap } from "./core/names.js";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
 const PAGE = 20; // days rendered before "show earlier"
@@ -83,6 +84,15 @@ export default function CoachApp() {
     if (personAdherence) personAdherence.days.forEach((d) => (out[d.date] = d));
     return out;
   }, [personAdherence]);
+  // Built from this person's own programs plus their own ad-hoc activities,
+  // so a name can never leak from one client's program into another's day.
+  const names = useMemo(() => {
+    if (!data || !data.ok || !person) return {};
+    const versions = (data.programs || [])
+      .filter((r) => r.assigned_to === person.id && r.definition)
+      .map((r) => ({ definition: r.definition }));
+    return buildNameMap(versions, (data.overrides || {})[person.id]);
+  }, [data, person]);
 
   if (checking) {
     return (
@@ -110,6 +120,7 @@ export default function CoachApp() {
               total={days.length}
               adherence={personAdherence}
               pctByDay={pctByDay}
+              names={names}
               onMore={() => setVisible((v) => v + PAGE)}
             />
           )}
@@ -249,7 +260,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, adherence, pctByDay, onMore }) {
+function PersonPanel({ person, days, total, adherence, pctByDay, names, onMore }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -279,7 +290,7 @@ function PersonPanel({ person, days, total, adherence, pctByDay, onMore }) {
           <Adherence person={person} adherence={adherence} />
           <div className="space-y-3">
             {days.map((d) => (
-              <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} />
+              <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} names={names} />
             ))}
           </div>
           {days.length < total && (
@@ -402,7 +413,7 @@ function Figure({ label, value, big }) {
 
 /* -------------------------------- day card -------------------------------- */
 
-export function DayCard({ day, scored }) {
+export function DayCard({ day, scored, names }) {
   const shaped = day.log ? shapeDay(day.log) : null;
   const sched = day.override ? shapeOverride(day.override) : null;
   const label = formatDay(day.day);
@@ -443,7 +454,7 @@ export function DayCard({ day, scored }) {
           <Group title="Exercises">
             <div className="space-y-2">
               {shaped.exercises.map((e) => (
-                <Exercise key={e.id} ex={e} />
+                <Exercise key={e.id} ex={e} names={names} />
               ))}
             </div>
           </Group>
@@ -454,7 +465,7 @@ export function DayCard({ day, scored }) {
             <Pairs
               items={shaped.measurements.map((m) => ({
                 key: m.id,
-                label: labelFor(m.id),
+                label: labelFor(m.id, names),
                 value: unitFor(m.id) ? `${m.value} ${unitFor(m.id)}` : String(m.value),
               }))}
             />
@@ -464,7 +475,7 @@ export function DayCard({ day, scored }) {
         {shaped && shaped.ratings.length > 0 && (
           <Group title="How it felt">
             <Pairs
-              items={shaped.ratings.map((r) => ({ key: r.id, label: labelFor(r.id), value: String(r.value) }))}
+              items={shaped.ratings.map((r) => ({ key: r.id, label: labelFor(r.id, names), value: String(r.value) }))}
             />
           </Group>
         )}
@@ -474,7 +485,7 @@ export function DayCard({ day, scored }) {
             <div className="flex gap-1.5 flex-wrap">
               {shaped.ticked.map((id) => (
                 <Tag key={id} mono>
-                  {labelFor(id)}
+                  {labelFor(id, names)}
                 </Tag>
               ))}
             </div>
@@ -486,7 +497,7 @@ export function DayCard({ day, scored }) {
             <div className="flex gap-1.5 flex-wrap">
               {shaped.checks.map((id) => (
                 <Tag key={id} mono>
-                  {labelFor(id)}
+                  {labelFor(id, names)}
                 </Tag>
               ))}
             </div>
@@ -498,7 +509,7 @@ export function DayCard({ day, scored }) {
             <div className="flex gap-1.5 flex-wrap">
               {shaped.unchecked.map((id) => (
                 <Tag key={id} mono tone="quiet">
-                  {labelFor(id)}
+                  {labelFor(id, names)}
                 </Tag>
               ))}
             </div>
@@ -557,7 +568,7 @@ function Schedule({ sched }) {
   );
 }
 
-function Exercise({ ex }) {
+function Exercise({ ex, names }) {
   const substituted = Boolean(ex.sub);
   return (
     <div style={{ borderColor: T.border }} className="border-l-2 pl-3">
@@ -566,7 +577,7 @@ function Exercise({ ex }) {
           style={{ fontFamily: FONT_MONO, color: substituted ? T.textMuted : T.textPrimary }}
           className="text-xs"
         >
-          {ex.id}
+          {labelFor(ex.id, names)}
           {substituted && (
             <>
               <span style={{ color: T.textMuted }}> → </span>

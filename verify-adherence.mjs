@@ -23,7 +23,9 @@ import {
   pctLabel,
 } from "./src/core/adherence.js";
 
-import { collectProgramIds } from "./src/core/validate-program.js";
+import { collectProgramIds, collectLoggedIds } from "./src/core/validate-program.js";
+import { buildNameMap, namesFromProgram, namesFromOverrides } from "./src/core/names.js";
+import { labelFor } from "./src/core/shape.js";
 
 // Programs come from ./fixtures/programs.json, not from the client repos.
 // An earlier draft imported ../Juha-PTapp/src/core/program-juha.js and friends,
@@ -240,6 +242,63 @@ check("per-day figures are byte-for-byte what buildHistoryRows returns", () => {
     assert.strictEqual(m.total, row.total, row.date + " total");
     assert.strictEqual(m.doneCount, row.doneCount, row.date + " doneCount");
   }
+});
+
+/* --------------------------- 4a. Name resolution ------------------------- */
+
+console.log("\nName resolution");
+
+check("tracking metrics resolve — they carry `label`, not `name`", () => {
+  // chk-alc-units was the one ID that stayed raw when the resolver only read
+  // `name`. It sits under program.tracking.numbers with a `label`.
+  const n = namesFromProgram(byId["juha-2026-09"].definition);
+  assert.strictEqual(n["chk-alc-units"], "Alcohol");
+  assert.ok(n["up-1"], "exercises must still resolve");
+});
+
+check("ad-hoc activities resolve from overrides, not from the program", () => {
+  const n = namesFromOverrides(toRows(readJson("./fixtures/overrides-juha.json")));
+  assert.strictEqual(n["act-1789497573951"], "HIIT training 3x3x3x1min. Total 60mins");
+  assert.strictEqual(n["act-1785999019464-ckqyb"], "Tennis 60min");
+});
+
+check("an unknown ID keeps its raw ID rather than resolving to nothing", () => {
+  const n = buildNameMap([{ definition: byId["juha-2026-09"].definition }], []);
+  assert.strictEqual(n["not-a-real-id"], undefined);
+});
+
+check("every logged ID resolves, except activities deleted from the calendar", () => {
+  const knownGone = [
+    // Ticked off, then the activity was removed from the day in the calendar.
+    // 2026-08-10 and 2026-08-17 show "activities": [] in day_overrides; the
+    // name exists nowhere in the database any more. Not a resolver gap.
+    "act-1785822782099-nw63o",
+    "act-1785822900417-nwgi9",
+    "act-1785822908175-67ill",
+  ];
+  for (const [key, who] of [["juha", ID.juha], ["henna", ID.henna], ["joonatan", ID.joonatan]]) {
+    const versions = programRows.filter((r) => r.assigned_to === who).map((r) => ({ definition: r.definition }));
+    const names = buildNameMap(versions, toRows(readJson(`./fixtures/overrides-${key}.json`)));
+    const logged = collectLoggedIds(Object.values(readJson(`./fixtures/logs-${key}.json`)));
+    const missing = [...logged].filter((id) => !names[id]).sort();
+    assert.deepStrictEqual(missing, key === "juha" ? knownGone : [], `${key}: unresolved -> ${missing.join(", ")}`);
+  }
+});
+
+check("a nameless act- ID is labelled, never shown as a raw ID", () => {
+  assert.strictEqual(labelFor("act-1785822782099-nw63o", {}), "Activity (since removed)");
+  // A real name still wins over the fallback.
+  assert.strictEqual(labelFor("act-1789497573951", { "act-1789497573951": "HIIT" }), "HIIT");
+  // Non-activity IDs are not swept up by the prefix rule.
+  assert.strictEqual(labelFor("up-1", {}), "up-1");
+});
+
+check("names are drawn only from that person's own program", () => {
+  const juhaOnly = buildNameMap([{ definition: byId["juha-2026-09"].definition }], []);
+  const hennaOnly = buildNameMap([{ definition: byId["henna-2026-09"].definition }], []);
+  const hennaExclusive = Object.keys(hennaOnly).filter((id) => !juhaOnly[id]);
+  assert.ok(hennaExclusive.length > 0, "expected Henna to have IDs Juha does not");
+  hennaExclusive.forEach((id) => assert.strictEqual(juhaOnly[id], undefined));
 });
 
 /* ------------------- 4b. Fixture fidelity (drift guard) ------------------ */

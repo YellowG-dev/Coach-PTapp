@@ -52,8 +52,21 @@ const UNITS = {
   cardioHR: "bpm",
 };
 
-export function labelFor(id) {
-  return LABELS[id] || id;
+export function labelFor(id, names) {
+  // `names` comes from the person's own program (see core/names.js). It wins
+  // over the static LABELS map, which only ever covered the handful of IDs
+  // shared across all three clients. Falling through to the raw ID is the
+  // intended last resort, not a failure mode to paper over.
+  if (names && names[id]) return names[id];
+  if (LABELS[id]) return LABELS[id];
+  // An `act-` ID with no name is an ad-hoc activity that was ticked off and
+  // then deleted from the calendar: the tick survives in day_logs, the name
+  // was only ever in day_overrides.activities[] and is gone. Three of Juha's
+  // August days are in this state. The raw ID tells a coach nothing, and the
+  // prefix is machine-generated so the inference is safe — but the day still
+  // counted toward that day's total, so it is labelled rather than hidden.
+  if (/^act-/.test(id)) return "Activity (since removed)";
+  return id;
 }
 
 export function unitFor(id) {
@@ -142,8 +155,9 @@ export function shapeDay(payload) {
 
   // --- everything else that was ticked, that isn't already shown above ---
   //
-  // These IDs cannot be resolved to names until programs live in Supabase
-  // (Phase 5), but one thing *is* knowable now: the "chk-" prefix marks a
+  // Resolved to names by core/names.js as of Phase 6, now that programs live
+  // in Supabase. The split below still matters regardless: the "chk-" prefix
+  // marks a
   // daily habit check across all three clients. Everything else is an
   // exercise the person completed without recording loads. Lumping the two
   // together makes a six-exercise session read as one exercise plus noise,

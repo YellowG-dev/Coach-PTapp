@@ -15,6 +15,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildAllAdherence } from "./src/core/adherence.js";
 import { Adherence, DayCard } from "./src/app.jsx";
+import { buildNameMap } from "./src/core/names.js";
 
 const ID={juha:"1da21dd7-5f90-423b-ba6c-bf8dc3dd8dee",henna:"5b757e16-813a-46f6-be67-423ff3b093cc",joonatan:"47ba0f5b-9844-4a24-81ca-f561a7b2fc9d"};
 const read=p=>JSON.parse(fs.readFileSync("./fixtures/"+p,"utf8"));
@@ -40,7 +41,9 @@ const specimens=[
  ["today, barely started","2026-09-20"],["substitutions","2026-09-04"]];
 const juhaLogs=read("logs-juha.json"), juhaOv=read("overrides-juha.json");
 for(const [label,date] of specimens){
-  const html=renderToStaticMarkup(React.createElement(DayCard,{day:{day:date,log:juhaLogs[date]||null,override:juhaOv[date]||null,updated:null},scored:byDay[date]}));
+  const names=buildNameMap(programs.filter(r=>r.assigned_to===ID.juha).map(r=>({definition:r.definition})), Object.keys(juhaOv).map(d=>({day:d,payload:juhaOv[d]})));
+  const html=renderToStaticMarkup(React.createElement(DayCard,{day:{day:date,log:juhaLogs[date]||null,override:juhaOv[date]||null,updated:null},scored:byDay[date],names}));
+  if(/>up-\d|>lo-\d|>mob-\d/.test(html)){console.log("    raw ID leaked into markup for "+date);bad++;}
   const shows = byDay[date].skip ? byDay[date].skip : Math.round(byDay[date].pct*100)+"%";
   const present = html.includes(shows.split(" ")[0]);
   console.log(`  ${label.padEnd(22)} ${date}  badge="${shows}" ${present?"present":"MISSING"}  ${String(html.length).padStart(5)} chars`);
