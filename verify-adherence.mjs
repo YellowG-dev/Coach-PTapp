@@ -241,7 +241,149 @@ check("per-day figures are byte-for-byte what buildHistoryRows returns", () => {
   }
 });
 
-/* ------------------------------ 5. Report -------------------------------- */
+/* --------------------- 5. Rules of Hooks (structural) -------------------- */
+
+// Phase 6 shipped a blank page because two useMemo calls sat below an early
+// `return`, so the component registered 9 hooks on first render and 11 on the
+// next and React aborted the tree. A mount test would not have caught it: the
+// broken path only runs for a signed-in user, which needs Supabase stubbed.
+// This scans the source instead — for every function whose name starts with a
+// capital (a component) or `use` (a custom hook), no hook call may appear after
+// that function's first top-level `return`.
+console.log("\nRules of Hooks (structural scan of app.jsx)");
+
+function blankOut(src) {
+  // Replace comment and string-literal contents with spaces, preserving length
+  // so line numbers stay correct. Without this the scan matched the word
+  // "returns" inside a comment and reported a violation that did not exist.
+  const out = src.split("");
+  let i = 0;
+  while (i < src.length) {
+    const two = src.slice(i, i + 2);
+    if (two === "//") {
+      while (i < src.length && src[i] !== "\n") out[i++] = " ";
+    } else if (two === "/*") {
+      out[i++] = " "; out[i++] = " ";
+      while (i < src.length && src.slice(i, i + 2) !== "*/") out[i++] = " ";
+      if (i < src.length) { out[i++] = " "; out[i++] = " "; }
+    } else if (src[i] === '"' || src[i] === "'" || src[i] === "`") {
+      const q = src[i];
+      i++;
+      while (i < src.length && src[i] !== q) {
+        if (src[i] === "\\") { out[i++] = " "; }
+        if (i < src.length) out[i++] = " ";
+      }
+      if (i < src.length) i++;
+    } else {
+      i++;
+    }
+  }
+  return out.join("");
+}
+
+function hookOrderViolations(rawSource) {
+  const source = blankOut(rawSource);
+  const bad = [];
+  // `export default function CoachApp(` must match. The first draft of this
+  // regex was /^(?:export\s+)?function/ and therefore skipped the one
+  // component that had the defect, passing green against the broken file.
+  const fnRe = /^(?:export\s+(?:default\s+)?)?function\s+([A-Z]\w*|use[A-Z]\w*)\s*\(/gm;
+  let m;
+  while ((m = fnRe.exec(source)) !== null) {
+    const name = m[1];
+    let i = source.indexOf("{", m.index + m[0].length);
+    if (i === -1) continue;
+    let depth = 0;
+    let end = i;
+    for (let k = i; k < source.length; k++) {
+      if (source[k] === "{") depth++;
+      else if (source[k] === "}") {
+        depth--;
+        if (depth === 0) { end = k; break; }
+      }
+    }
+    const body = source.slice(i + 1, end);
+
+    // first `return` at depth 0 relative to the body. Word boundaries on BOTH
+    // sides: "returns" is not a return statement.
+    let d = 0;
+    let firstReturn = -1;
+    for (let k = 0; k < body.length; k++) {
+      const ch = body[k];
+      if (ch === "{" || ch === "(") d++;
+      else if (ch === "}" || ch === ")") d--;
+      else if (
+        d === 0 &&
+        body.startsWith("return", k) &&
+        !/\w/.test(body[k - 1] || "") &&
+        !/\w/.test(body[k + 6] || "")
+      ) {
+        firstReturn = k;
+        break;
+      }
+    }
+    if (firstReturn === -1) continue;
+
+    const after = body.slice(firstReturn);
+    const hookRe = /\buse[A-Z]\w*\s*\(/g;
+    let h;
+    while ((h = hookRe.exec(after)) !== null) {
+      const line = rawSource.slice(0, i + 1 + firstReturn + h.index).split("\n").length;
+      bad.push(`${name}(): ${h[0].replace(/\s*\($/, "")} called after an early return, line ${line}`);
+    }
+  }
+  return bad;
+}
+
+/** Which functions the scan actually looked at — under-coverage must be loud. */
+function scannedNames(source) {
+  const re = /^(?:export\s+(?:default\s+)?)?function\s+([A-Z]\w*|use[A-Z]\w*)\s*\(/gm;
+  const out = [];
+  let m;
+  while ((m = re.exec(source)) !== null) out.push(m[1]);
+  return out;
+}
+
+check("the scan actually covers CoachApp and every other component", () => {
+  const names = scannedNames(fs.readFileSync("./src/app.jsx", "utf8"));
+  for (const required of ["CoachApp", "SignIn", "PersonPanel", "DayCard", "Adherence"]) {
+    assert.ok(names.includes(required), `${required} was never scanned`);
+  }
+});
+
+check("no hook is called after an early return anywhere in app.jsx", () => {
+  const src = fs.readFileSync("./src/app.jsx", "utf8");
+  const bad = hookOrderViolations(src);
+  assert.deepStrictEqual(bad, [], "\n       " + bad.join("\n       "));
+});
+
+check("the scanner actually detects the bug it was written for", () => {
+  const broken = [
+    "function Broken() {",
+    "  const [a, setA] = useState(1);",
+    "  if (!a) return null;",
+    "  const b = useMemo(() => 1, []);",
+    "  return b;",
+    "}",
+  ].join("\n");
+  const bad = hookOrderViolations(broken);
+  assert.strictEqual(bad.length, 1, "scanner missed a known violation");
+  assert.ok(bad[0].includes("useMemo"));
+});
+
+check("the scanner does not fire on correctly ordered hooks", () => {
+  const good = [
+    "function Fine() {",
+    "  const [a, setA] = useState(1);",
+    "  const b = useMemo(() => 1, []);",
+    "  if (!a) return null;",
+    "  return b;",
+    "}",
+  ].join("\n");
+  assert.deepStrictEqual(hookOrderViolations(good), []);
+});
+
+/* ------------------------------ 6. Report -------------------------------- */
 
 console.log("\nComputed adherence (real data)");
 for (const p of roster) {

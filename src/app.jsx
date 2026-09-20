@@ -62,15 +62,11 @@ export default function CoachApp() {
 
   useEffect(() => setVisible(PAGE), [selectedId]);
 
-  if (checking) {
-    return (
-      <Shell>
-        <Muted>Checking your session…</Muted>
-      </Shell>
-    );
-  }
-  if (!user) return <SignIn />;
-
+  // EVERY hook must run on EVERY render, so all of them live above the early
+  // returns below. The first draft of Phase 6 put these two useMemo calls
+  // after `if (checking) return`, which meant the first render registered 9
+  // hooks and the second registered 11. React aborts the whole tree on that
+  // mismatch, and the page renders as nothing at all.
   const roster = data?.roster || [];
   const person = roster.find((p) => p.id === selectedId) || roster[0] || null;
   const days = person && data ? mergeDays(data, person.id) : [];
@@ -87,6 +83,15 @@ export default function CoachApp() {
     if (personAdherence) personAdherence.days.forEach((d) => (out[d.date] = d));
     return out;
   }, [personAdherence]);
+
+  if (checking) {
+    return (
+      <Shell>
+        <Muted>Checking your session…</Muted>
+      </Shell>
+    );
+  }
+  if (!user) return <SignIn />;
 
   return (
     <Shell>
