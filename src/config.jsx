@@ -19,7 +19,7 @@ export const AUTH_STORAGE_KEY = "ptAppCoach_auth";
 
 // Versioned independently of the client apps. The three of them share one
 // APP_VERSION line because they ship the same engine; this one does not.
-export const COACH_VERSION = "0.4.0";
+export const COACH_VERSION = "0.4.1";
 
 // Same palette and type as the client apps, so a client's day looks the same
 // to the coach as it does to them. Kept as plain values rather than Tailwind

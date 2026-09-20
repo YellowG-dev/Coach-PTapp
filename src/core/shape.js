@@ -14,11 +14,26 @@
 // the client actually recorded.
 
 /** Keys consumed by the structured sections below. Anything else is surfaced raw. */
+// The legacy value-carrying keys (weight, knee, vo2max, cardioHR,
+// nutrition) are deliberately NOT listed here. They are consumed
+// dynamically below, only once their value is provably on screen, so a
+// legacy field this file fails to fold still surfaces as raw JSON instead
+// of being silently swallowed by a static allowlist.
 const KNOWN_KEYS = [
   "done", "loads", "subs", "exNotes", "numbers", "scales", "choices",
-  "notes", "gentler", "deload", "weekType", "weight", "knee", "vo2max",
-  "cardioHR", "nutrition",
+  "notes", "gentler", "deload", "weekType",
 ];
+
+/** Legacy `nutrition` keys -> the tracked-metric IDs they became. */
+const LEGACY_NUTRITION_IDS = {
+  cal: "nut-cal",
+  protein: "nut-pro",
+  fat: "nut-fat",
+  carbs: "nut-carb",
+};
+
+/** The none/mild/moderate/severe wording the numeric knee scale replaced. */
+const LEGACY_KNEE_SCALE = { none: 1, mild: 2, moderate: 3, severe: 4 };
 
 /** Friendly labels for IDs that are stable across all three clients. */
 const LABELS = {
@@ -183,13 +198,57 @@ export function shapeDay(payload) {
   Object.keys(p.numbers || {}).forEach((id) => {
     if (p.numbers[id] != null) measurements.push({ id, value: p.numbers[id] });
   });
-  if (typeof p.weight === "number") measurements.push({ id: "weight", value: p.weight });
-  if (typeof p.vo2max === "number") measurements.push({ id: "vo2max", value: p.vo2max });
-  if (typeof p.cardioHR === "number") measurements.push({ id: "cardioHR", value: p.cardioHR });
+
+  // Days logged before 2026-08-28 carry both shapes at once: `weight`
+  // beside numbers["chk-weigh"], `knee` beside scales["chk-knee"],
+  // `nutrition` beside the four nut-* metrics, `cardioHR` beside
+  // cv-hr-avg / cv-hr-peak. Emitting both showed the coach every one of
+  // those measurements twice, on all 27 affected days.
+  //
+  // Each legacy field is folded onto the ID its modern counterpart uses —
+  // so it resolves to a real program label rather than a bare key — and is
+  // dropped only when the counterpart already carries the identical value.
+  // That was true of every row in the database when this was written
+  // (27 rows, zero mismatches on all six fields, checked 20 Sep 2026).
+  //
+  // When the two DISAGREE the legacy key is left unconsumed on purpose and
+  // reappears under "Other recorded fields". A reader that hides a conflict
+  // is worse than one that shows a duplicate.
+  const numbers = p.numbers || {};
+  const consumedLegacy = new Set();
+
+  /** true once `value` is provably on screen: absent, pushed, or already shown. */
+  const foldNumber = (targetId, value) => {
+    if (value == null) return true;
+    const current = numbers[targetId];
+    if (current == null) {
+      measurements.push({ id: targetId, value });
+      return true;
+    }
+    return Number(current) === Number(value);
+  };
+
+  if (typeof p.weight === "number" && foldNumber("chk-weigh", p.weight)) {
+    consumedLegacy.add("weight");
+  }
+  if (typeof p.vo2max === "number" && foldNumber("test-vo2max", p.vo2max)) {
+    consumedLegacy.add("vo2max");
+  }
+
+  // `cardioHR` is an object, never a bare number — the reason the original
+  // `typeof p.cardioHR === "number"` test never once fired.
+  if (p.cardioHR && typeof p.cardioHR === "object") {
+    const avgShown = foldNumber("cv-hr-avg", p.cardioHR.avg);
+    const peakShown = foldNumber("cv-hr-peak", p.cardioHR.peak);
+    if (avgShown && peakShown) consumedLegacy.add("cardioHR");
+  }
+
   if (p.nutrition && typeof p.nutrition === "object") {
-    Object.keys(p.nutrition).forEach((k) => {
-      if (p.nutrition[k] != null) measurements.push({ id: "nut-" + k, value: p.nutrition[k] });
-    });
+    const keys = Object.keys(p.nutrition);
+    const shown = keys.filter((k) =>
+      foldNumber(LEGACY_NUTRITION_IDS[k] || "nut-" + k, p.nutrition[k])
+    );
+    if (shown.length === keys.length) consumedLegacy.add("nutrition");
   }
   measurements.sort((a, b) => labelFor(a.id).localeCompare(labelFor(b.id)));
 
@@ -198,7 +257,18 @@ export function shapeDay(payload) {
   Object.keys(p.scales || {}).forEach((id) => {
     if (p.scales[id] != null) ratings.push({ id, value: p.scales[id] });
   });
-  if (typeof p.knee === "string") ratings.push({ id: "knee", value: p.knee });
+  // Same fold as the measurements above. The legacy wording is compared
+  // through the mapping the numeric scale replaced, then shown as words
+  // ("mild") rather than as the number a reader would have to decode.
+  if (typeof p.knee === "string") {
+    const currentKnee = (p.scales || {})["chk-knee"];
+    if (currentKnee == null) {
+      ratings.push({ id: "chk-knee", value: p.knee });
+      consumedLegacy.add("knee");
+    } else if (Number(currentKnee) === LEGACY_KNEE_SCALE[p.knee]) {
+      consumedLegacy.add("knee");
+    }
+  }
   Object.keys(p.choices || {}).forEach((id) => {
     if (p.choices[id] != null) ratings.push({ id, value: p.choices[id] });
   });
@@ -208,7 +278,9 @@ export function shapeDay(payload) {
   const gentler = p.gentler === true || p.deload === true;
   const unknown = {};
   Object.keys(p).forEach((k) => {
-    if (!KNOWN_KEYS.includes(k)) unknown[k] = p[k];
+    if (KNOWN_KEYS.includes(k)) return;
+    if (consumedLegacy.has(k)) return;
+    unknown[k] = p[k];
   });
 
   // An explicitly unticked item is a recorded fact — the person opened the day

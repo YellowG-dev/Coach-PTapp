@@ -37,7 +37,31 @@ const JUHA_0917 = {
 
 const HENNA_0908 = { done: { m1: true, m2: true, m3: true, m4: true, m5: true, m6: true }, scales: { energy: 2 }, gentler: false };
 const JOONATAN_0912 = { done: { "mob-2": false }, gentler: false };
+// A legacy-only day: the old loose scalars with no modern counterpart.
 const LEGACY = { weight: 84.2, knee: "mild", vo2max: 38, deload: true, weekType: "a", notes: "felt heavy", mystery: { foo: 1 } };
+
+// Real rows, pulled from Supabase and trimmed of done/loads/subs/exNotes.
+// Both shapes are present at once, which is true of all 27 pre-2026-08-28
+// days. JUHA_0803 is one of the eight carrying `cardioHR`.
+const JUHA_0803 = {
+  knee: "none", deload: false, weight: 85.4, gentler: false, weekType: "A",
+  scales: { "chk-knee": 1 },
+  cardioHR: { avg: 116, peak: 139 },
+  nutrition: { cal: 2950, fat: 90, carbs: 290, protein: 220 },
+  numbers: {
+    "nut-cal": 2950, "nut-fat": 90, "nut-pro": 220, "nut-carb": 290,
+    "chk-weigh": 85.4, "cv-hr-avg": 116, "cv-hr-peak": 139,
+  },
+};
+const JUHA_0815 = {
+  knee: "none", deload: false, weight: 85.8, vo2max: 39, gentler: false, weekType: "B",
+  scales: { "chk-knee": 1 },
+  nutrition: { cal: 2570, fat: 95, carbs: 240, protein: 175 },
+  numbers: {
+    "nut-cal": 2570, "nut-fat": 95, "nut-pro": 175, "nut-carb": 240,
+    "chk-weigh": 85.8, "cv-hr-avg": 113, "cv-hr-peak": 132, "test-vo2max": 39,
+  },
+};
 
 const OVERRIDES = [
   ["Juha 09-19", { cardio: null, tennis: "social", strength: null }],
@@ -93,11 +117,45 @@ check("unticked item separated from ticked", j12.unchecked, ["mob-2"]);
 check("a day of only false flags is not 'empty'", j12.isEmpty, false);
 check("truly empty payload is empty", shapeDay({}).isEmpty, true);
 
+// Legacy fields are folded onto the IDs their modern counterparts use, so a
+// value recorded under the old shape resolves to a real program label
+// instead of a bare key. With no counterpart present, the value must still
+// appear — under the new ID.
 const L = shapeDay(LEGACY);
-check("legacy loose weight surfaced", L.measurements.find((m) => m.id === "weight").value, 84.2);
-check("legacy string knee surfaced", L.ratings.find((r) => r.id === "knee").value, "mild");
+check("legacy weight folded onto chk-weigh", L.measurements.find((m) => m.id === "chk-weigh")?.value ?? null, 84.2);
+check("legacy vo2max folded onto test-vo2max", L.measurements.find((m) => m.id === "test-vo2max")?.value ?? null, 38);
+check("legacy knee folded onto chk-knee, still words", L.ratings.find((r) => r.id === "chk-knee")?.value ?? null, "mild");
+check("no bare legacy IDs left behind", L.measurements.concat(L.ratings).filter((x) => ["weight", "knee", "vo2max", "cardioHR"].includes(x.id)), []);
 check("legacy deload maps to gentler", L.gentler, true);
 check("unrecognised key preserved, not dropped", L.unknown, { mystery: { foo: 1 } });
+check("folded legacy keys are not re-reported as unknown", Object.keys(L.unknown || {}).sort(), ["mystery"]);
+
+// The duplication this fold exists to remove. Before it, these days emitted
+// each measurement twice — once from `numbers`, once from the loose scalar.
+const D3 = shapeDay(JUHA_0803);
+const idsOf = (list) => list.map((x) => x.id).sort();
+const dupes = (list) => idsOf(list).filter((id, i, all) => all[i - 1] === id);
+check("0803: no duplicate measurement IDs", dupes(D3.measurements), []);
+check("0803: no duplicate rating IDs", dupes(D3.ratings), []);
+check("0803: measurements are exactly the modern metrics", idsOf(D3.measurements), ["chk-weigh", "cv-hr-avg", "cv-hr-peak", "nut-cal", "nut-carb", "nut-fat", "nut-pro"]);
+check("0803: no nut-protein / nut-carbs invented", idsOf(D3.measurements).filter((id) => id === "nut-protein" || id === "nut-carbs"), []);
+check("0803: cardioHR consumed, not dumped as raw", D3.unknown, null); // null = nothing unrecognised
+check("0803: knee shown once, from the scale", D3.ratings, [{ id: "chk-knee", value: 1 }]);
+
+const D15 = shapeDay(JUHA_0815);
+check("0815: no duplicate measurement IDs", dupes(D15.measurements), []);
+check("0815: vo2max shown once", D15.measurements.filter((m) => String(m.id).includes("vo2max")).length, 1);
+check("0815: nothing left unrecognised", D15.unknown, null);
+
+// Proving the suppression can fail: a legacy value that DISAGREES with its
+// counterpart must not be hidden. It is left unconsumed and reappears under
+// "Other recorded fields". Without this case, a reader that dropped legacy
+// fields unconditionally would pass every check above.
+const CONFLICT = { ...JUHA_0803, weight: 99.9, cardioHR: { avg: 116, peak: 199 } };
+const C = shapeDay(CONFLICT);
+check("conflicting legacy weight is surfaced, not hidden", C.unknown?.weight ?? null, 99.9);
+check("conflicting legacy cardioHR is surfaced, not hidden", C.unknown?.cardioHR ?? null, { avg: 116, peak: 199 });
+check("agreeing legacy fields stay consumed in the same payload", Object.keys(C.unknown || {}).sort(), ["cardioHR", "weight"]);
 
 console.log("\n--- ticked-without-sets vs daily checks ---");
 const JOONATAN_0908 = {
