@@ -1,303 +1,561 @@
-// Coach-PTapp — Phase 0 shell.
+// Coach-PTapp — dashboard v1.
 //
-// Two states: signed out (ask for a magic link) and signed in (prove the
-// session really has coach rights). The dashboard itself is Phase 1; what is
-// here now is the smallest thing that answers "does the plumbing work", and
-// it answers it with real rows read through real policies rather than a
-// hardcoded "connected" badge.
-//
-// Note what this file does NOT do. It never filters by user id. Every query
-// is a plain select, and the rows that come back are exactly the rows the
-// database is willing to hand this session. If a client's sharing is switched
-// off, their row disappears from this screen on its own — which is the point.
+// One client at a time, chosen with the person switcher; below it, that
+// person's logged days newest first, showing exactly what they recorded.
+// No percentages and no adherence scoring: those need program definitions in
+// Supabase, which is Phase 5. Everything here is a raw value the client typed.
 
 import React, { useState, useEffect, useCallback } from "react";
-import { getClient, isConfigured, sendMagicLink, currentUser, onAuthChange, signOut } from "./core/supabase.js";
-import { THEME, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
+import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
+import { loadAll } from "./core/data.js";
+import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
+import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
-/* ------------------------------ Sign-in ------------------------------ */
-
-function SignIn() {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState(null); // { kind: "sent" | "error", message }
-  const [sending, setSending] = useState(false);
-
-  const submit = useCallback(async () => {
-    if (sending) return;
-    setSending(true);
-    setStatus(null);
-    const result = await sendMagicLink(email);
-    setSending(false);
-    setStatus(
-      result.ok
-        ? { kind: "sent", message: "Link sent. Open it in this browser to finish signing in." }
-        : { kind: "error", message: result.error }
-    );
-  }, [email, sending]);
-
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: THEME.bg }}>
-      <div
-        style={{ background: THEME.card, borderColor: THEME.border }}
-        className="w-full max-w-sm rounded-2xl border p-6"
-      >
-        <h1 style={{ fontFamily: FONT_DISPLAY, color: THEME.textPrimary }} className="text-xl font-bold">
-          Coach
-        </h1>
-        <p style={{ color: THEME.textSecondary }} className="text-sm mt-1.5">
-          Sign in to see training logs across your clients.
-        </p>
-
-        <label htmlFor="email" style={{ color: THEME.textSecondary }} className="block text-xs font-medium mt-5 mb-1.5">
-          Email address
-        </label>
-        <input
-          id="email"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") submit();
-          }}
-          placeholder="you@example.com"
-          style={{ fontFamily: FONT_BODY, color: THEME.textPrimary, background: THEME.bg, borderColor: THEME.border }}
-          className="w-full text-sm px-3 py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
-        />
-
-        <button
-          onClick={submit}
-          disabled={sending}
-          style={{ background: THEME.accent, color: "#14171C", opacity: sending ? 0.6 : 1 }}
-          className="w-full mt-3 text-sm font-semibold py-2 rounded-lg focus:outline-none focus-visible:ring-2"
-        >
-          {sending ? "Sending…" : "Email me a sign-in link"}
-        </button>
-
-        {status && (
-          <p
-            style={{ color: status.kind === "sent" ? THEME.accentAlt : "#C97388" }}
-            className="text-xs mt-3"
-            role="status"
-          >
-            {status.message}
-          </p>
-        )}
-
-        <p style={{ color: THEME.textMuted }} className="text-[11px] mt-5">
-          Accounts are not created here. If the address is unknown, the link will not send.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/* --------------------------- Connection check --------------------------- */
-//
-// Temporary. Phase 1 replaces this whole component with the dashboard; it
-// stays only until the plumbing has been seen working once from a browser.
-
-function ConnectionCheck({ user }) {
-  const [state, setState] = useState({ loading: true, error: null, people: [] });
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const c = getClient();
-      if (!c) {
-        setState({ loading: false, error: "No Supabase client.", people: [] });
-        return;
-      }
-
-      // Two plain selects. RLS decides what comes back.
-      const [profilesRes, logsRes] = await Promise.all([
-        c.from("profiles").select("id, display_name"),
-        c.from("day_logs").select("user_id, day"), // payload left out on purpose — it is large
-      ]);
-      if (cancelled) return;
-
-      const error = profilesRes.error || logsRes.error;
-      if (error) {
-        setState({ loading: false, error: error.message, people: [] });
-        return;
-      }
-
-      const logs = logsRes.data || [];
-      const people = (profilesRes.data || [])
-        .map((p) => {
-          const theirs = logs.filter((l) => l.user_id === p.id);
-          const days = theirs.map((l) => l.day).sort();
-          return {
-            id: p.id,
-            name: p.display_name,
-            isSelf: p.id === user.id,
-            count: theirs.length,
-            latest: days.length ? days[days.length - 1] : null,
-          };
-        })
-        .sort((a, b) => Number(b.isSelf) - Number(a.isSelf) || a.name.localeCompare(b.name));
-
-      setState({ loading: false, error: null, people, orphanLogs: logs.length - people.reduce((n, p) => n + p.count, 0) });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user.id]);
-
-  if (state.loading) {
-    return (
-      <p style={{ color: THEME.textMuted }} className="text-sm">
-        Checking what this account can read…
-      </p>
-    );
-  }
-
-  if (state.error) {
-    return (
-      <div style={{ background: THEME.card, borderColor: "#C97388" }} className="rounded-2xl border p-4">
-        <p style={{ color: THEME.textPrimary }} className="text-sm font-medium">
-          The database refused that request
-        </p>
-        <p style={{ fontFamily: FONT_MONO, color: THEME.textSecondary }} className="text-xs mt-1.5">
-          {state.error}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ background: THEME.card, borderColor: THEME.border }} className="rounded-2xl border overflow-hidden">
-      <div style={{ borderColor: THEME.border }} className="px-4 py-3 border-b">
-        <h2 style={{ fontFamily: FONT_DISPLAY, color: THEME.textPrimary }} className="text-sm font-bold">
-          What this account can read
-        </h2>
-        <p style={{ color: THEME.textMuted }} className="text-[11px] mt-0.5">
-          Everyone whose data the database is willing to show you, and how much of it there is.
-        </p>
-      </div>
-
-      {state.people.length === 0 ? (
-        <p style={{ color: THEME.textMuted }} className="text-sm px-4 py-4">
-          Nothing visible. Either no coach links exist for this account, or sharing is switched off.
-        </p>
-      ) : (
-        state.people.map((p) => (
-          <div
-            key={p.id}
-            style={{ borderColor: THEME.border }}
-            className="px-4 py-3 border-b last:border-b-0 flex items-baseline justify-between gap-3"
-          >
-            <div className="min-w-0">
-              <p style={{ color: THEME.textPrimary }} className="text-sm font-medium truncate">
-                {p.name}
-                {p.isSelf && (
-                  <span style={{ color: THEME.textMuted }} className="font-normal">
-                    {" "}
-                    (you)
-                  </span>
-                )}
-              </p>
-              <p style={{ fontFamily: FONT_MONO, color: THEME.textMuted }} className="text-[11px] mt-0.5 truncate">
-                {p.id}
-              </p>
-            </div>
-            <p style={{ fontFamily: FONT_MONO, color: THEME.textSecondary }} className="text-xs shrink-0 text-right">
-              {p.count} {p.count === 1 ? "day" : "days"}
-              {p.latest && (
-                <>
-                  <br />
-                  <span style={{ color: THEME.textMuted }}>latest {p.latest}</span>
-                </>
-              )}
-            </p>
-          </div>
-        ))
-      )}
-
-      {state.orphanLogs > 0 && (
-        <div style={{ borderColor: THEME.border }} className="px-4 py-3 border-t">
-          <p style={{ color: THEME.accent }} className="text-xs">
-            {state.orphanLogs} logged {state.orphanLogs === 1 ? "day belongs" : "days belong"} to someone with no profile
-            row. Add one before Phase 1, or they will show up nameless.
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* --------------------------------- App --------------------------------- */
+const PAGE = 20; // days rendered before "show earlier"
 
 export default function CoachApp() {
   const [user, setUser] = useState(null);
-  const [ready, setReady] = useState(false);
+  const [checking, setChecking] = useState(true);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState(null);
+  const [visible, setVisible] = useState(PAGE);
 
   useEffect(() => {
-    let cancelled = false;
+    let dead = false;
     (async () => {
-      const existing = await currentUser();
-      if (cancelled) return;
-      setUser(existing);
-      setReady(true);
+      const u = await currentUser();
+      if (!dead) {
+        setUser(u);
+        setChecking(false);
+      }
     })();
-    const unsubscribe = onAuthChange((u) => setUser(u));
+    const stop = onAuthChange((u) => {
+      setUser(u);
+      setChecking(false);
+    });
     return () => {
-      cancelled = true;
-      unsubscribe();
+      dead = true;
+      stop();
     };
   }, []);
 
-  if (!isConfigured()) {
+  useEffect(() => {
+    if (!user) {
+      setData(null);
+      return;
+    }
+    let dead = false;
+    setLoading(true);
+    (async () => {
+      const result = await loadAll(user);
+      if (dead) return;
+      setData(result);
+      setLoading(false);
+      setSelectedId((prev) => prev || result.roster[0]?.id || null);
+    })();
+    return () => {
+      dead = true;
+    };
+  }, [user]);
+
+  useEffect(() => setVisible(PAGE), [selectedId]);
+
+  if (checking) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: THEME.bg }}>
-        <p style={{ color: THEME.textSecondary, fontFamily: FONT_BODY }} className="text-sm">
-          This build has no Supabase settings. Check src/config.jsx.
-        </p>
-      </div>
+      <Shell>
+        <Muted>Checking your session…</Muted>
+      </Shell>
     );
   }
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: THEME.bg }}>
-        <p style={{ color: THEME.textMuted, fontFamily: FONT_BODY }} className="text-sm">
-          Loading…
-        </p>
-      </div>
-    );
-  }
-
   if (!user) return <SignIn />;
 
+  const roster = data?.roster || [];
+  const person = roster.find((p) => p.id === selectedId) || roster[0] || null;
+  const days = person && data ? mergeDays(data, person.id) : [];
+
   return (
-    <div style={{ background: THEME.bg, fontFamily: FONT_BODY }} className="min-h-screen w-full pb-12">
-      <div className="max-w-2xl mx-auto px-4 pt-8">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 style={{ fontFamily: FONT_DISPLAY, color: THEME.textPrimary }} className="text-xl font-bold">
-              Coach
-            </h1>
-            <p style={{ fontFamily: FONT_MONO, color: THEME.textMuted }} className="text-[11px] mt-0.5 truncate">
-              {user.email}
-            </p>
-          </div>
+    <Shell>
+      <Header email={user.email} />
+
+      {loading && <Muted>Loading training data…</Muted>}
+      {data && !data.ok && <Problem>{data.error}</Problem>}
+
+      {data && data.ok && (
+        <>
+          <Switcher roster={roster} selectedId={person ? person.id : null} onSelect={setSelectedId} />
+          {person && (
+            <PersonPanel
+              person={person}
+              days={days.slice(0, visible)}
+              total={days.length}
+              onMore={() => setVisible((v) => v + PAGE)}
+            />
+          )}
+        </>
+      )}
+
+      <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
+        Coach dashboard {COACH_VERSION} · raw logged values. Exercise names and adherence arrive with Phase 5.
+      </p>
+    </Shell>
+  );
+}
+
+/* ------------------------------- data joins ------------------------------- */
+
+/** One row per day the person either logged or rescheduled, newest first. */
+function mergeDays(data, userId) {
+  const logs = (data.logs || {})[userId] || [];
+  const overrides = (data.overrides || {})[userId] || [];
+  const byDay = {};
+  logs.forEach((r) => {
+    byDay[r.day] = { day: r.day, log: r.payload, override: null, updated: r.updated_at };
+  });
+  overrides.forEach((r) => {
+    if (!byDay[r.day]) byDay[r.day] = { day: r.day, log: null, override: r.payload, updated: null };
+    else byDay[r.day].override = r.payload;
+  });
+  return Object.values(byDay).sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+/* --------------------------------- screens -------------------------------- */
+
+function SignIn() {
+  const [email, setEmail] = useState("");
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const submit = useCallback(async () => {
+    setBusy(true);
+    setStatus(null);
+    const r = await sendMagicLink(email);
+    setBusy(false);
+    setStatus(r.ok ? { ok: true, text: "Link sent. Open it in this browser." } : { ok: false, text: r.error });
+  }, [email]);
+
+  return (
+    <Shell>
+      <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold">
+        Coach
+      </h1>
+      <p style={{ color: T.textSecondary }} className="text-sm mt-1 mb-5">
+        Sign in to see your clients' training.
+      </p>
+
+      {!isConfigured() ? (
+        <Problem>This build has no account service configured.</Problem>
+      ) : (
+        <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border p-4 max-w-sm">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !busy) submit();
+            }}
+            placeholder="you@example.com"
+            style={{ fontFamily: FONT_BODY, color: T.textPrimary, background: T.bg, borderColor: T.border }}
+            className="w-full text-sm px-3 py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
+          />
           <button
-            onClick={signOut}
-            style={{ borderColor: THEME.border, color: THEME.textSecondary }}
-            className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+            onClick={submit}
+            disabled={busy}
+            style={{ background: T.accent, color: "#14171C", opacity: busy ? 0.6 : 1 }}
+            className="w-full mt-2 text-sm font-semibold py-2 rounded-lg focus:outline-none focus-visible:ring-2"
           >
-            Sign out
+            {busy ? "Sending…" : "Send sign-in link"}
           </button>
+          {status && (
+            <p style={{ color: status.ok ? T.accentAlt : "#C97388" }} className="text-xs mt-2">
+              {status.text}
+            </p>
+          )}
         </div>
+      )}
+    </Shell>
+  );
+}
 
-        <div className="mt-6">
-          <ConnectionCheck user={user} />
-        </div>
-
-        <p style={{ color: THEME.textMuted }} className="text-[11px] mt-6">
-          Scaffold {COACH_VERSION}. The dashboard replaces this screen in Phase 1.
+function Header({ email }) {
+  return (
+    <div className="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold">
+          Coach
+        </h1>
+        <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-xs mt-0.5">
+          {email}
         </p>
       </div>
+      <button
+        onClick={signOut}
+        style={{ borderColor: T.border, color: T.textSecondary }}
+        className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+      >
+        Sign out
+      </button>
     </div>
+  );
+}
+
+function Switcher({ roster, selectedId, onSelect }) {
+  return (
+    <div className="flex gap-2 flex-wrap mb-5">
+      {roster.map((p) => {
+        const active = p.id === selectedId;
+        return (
+          <button
+            key={p.id}
+            onClick={() => onSelect(p.id)}
+            style={{
+              background: active ? T.accent : "transparent",
+              color: active ? "#14171C" : T.textSecondary,
+              borderColor: active ? T.accent : T.border,
+            }}
+            className="text-sm font-semibold px-3.5 py-2 rounded-xl border text-left focus:outline-none focus-visible:ring-2"
+          >
+            <span>{p.name}</span>
+            {p.isSelf && <span style={{ opacity: 0.65 }}> (you)</span>}
+            <span style={{ fontFamily: FONT_MONO, opacity: 0.75 }} className="block text-[11px] font-normal">
+              {p.state === "paused" ? "sharing paused" : `${p.days} ${p.days === 1 ? "day" : "days"}`}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PersonPanel({ person, days, total, onMore }) {
+  // The three states that must never be confused with one another.
+  if (person.state === "paused") {
+    return (
+      <Notice tone="pause" title="Sharing is paused">
+        This person has switched sharing off, so their training data is not visible to you right now — including their
+        name. This is <strong>not</strong> the same as having logged nothing: there may well be days behind this. It
+        comes back the moment they switch sharing on again, and nothing is lost meanwhile.
+      </Notice>
+    );
+  }
+
+  return (
+    <>
+      {person.state === "unnamed" && (
+        <Notice tone="warn" title="No profile row">
+          This person is sharing with you, but has no row in profiles, so there is no name to show. Their data below is
+          complete — only the label is missing.
+        </Notice>
+      )}
+
+      {total === 0 ? (
+        <Notice tone="quiet" title="No days logged yet">
+          {person.name} is sharing with you, and nothing has been recorded so far.
+        </Notice>
+      ) : (
+        <>
+          <div className="space-y-3">
+            {days.map((d) => (
+              <DayCard key={d.day} day={d} />
+            ))}
+          </div>
+          {days.length < total && (
+            <button
+              onClick={onMore}
+              style={{ borderColor: T.border, color: T.textSecondary }}
+              className="w-full mt-3 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
+            >
+              Show earlier days · {total - days.length} more
+            </button>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/* -------------------------------- day card -------------------------------- */
+
+function DayCard({ day }) {
+  const shaped = day.log ? shapeDay(day.log) : null;
+  const sched = day.override ? shapeOverride(day.override) : null;
+  const label = formatDay(day.day);
+
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border overflow-hidden">
+      <div
+        style={{ borderColor: T.border }}
+        className="border-b px-4 py-3 flex items-baseline justify-between gap-3 flex-wrap"
+      >
+        <div>
+          <span style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
+            {label.weekday}
+          </span>
+          <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-xs ml-2">
+            {label.full}
+          </span>
+        </div>
+        <div className="flex gap-1.5 flex-wrap">
+          {shaped && shaped.gentler && <Tag tone="accent">Gentler week</Tag>}
+          {shaped && shaped.weekType && <Tag>Week {String(shaped.weekType).toUpperCase()}</Tag>}
+          {sched && sched.skip && <Tag tone="warn">Skipped · {sched.skip}</Tag>}
+          {!day.log && <Tag>Rescheduled only</Tag>}
+        </div>
+      </div>
+
+      <div className="px-4 py-3 space-y-3">
+        {sched && !sched.isEmpty && <Schedule sched={sched} />}
+
+        {shaped && shaped.exercises.length > 0 && (
+          <Group title="Exercises">
+            <div className="space-y-2">
+              {shaped.exercises.map((e) => (
+                <Exercise key={e.id} ex={e} />
+              ))}
+            </div>
+          </Group>
+        )}
+
+        {shaped && shaped.measurements.length > 0 && (
+          <Group title="Measurements">
+            <Pairs
+              items={shaped.measurements.map((m) => ({
+                key: m.id,
+                label: labelFor(m.id),
+                value: unitFor(m.id) ? `${m.value} ${unitFor(m.id)}` : String(m.value),
+              }))}
+            />
+          </Group>
+        )}
+
+        {shaped && shaped.ratings.length > 0 && (
+          <Group title="How it felt">
+            <Pairs
+              items={shaped.ratings.map((r) => ({ key: r.id, label: labelFor(r.id), value: String(r.value) }))}
+            />
+          </Group>
+        )}
+
+        {shaped && shaped.checked.length > 0 && (
+          <Group title="Also ticked">
+            <div className="flex gap-1.5 flex-wrap">
+              {shaped.checked.map((id) => (
+                <Tag key={id} mono>
+                  {labelFor(id)}
+                </Tag>
+              ))}
+            </div>
+          </Group>
+        )}
+
+        {shaped && shaped.unchecked.length > 0 && (
+          <Group title="Opened but left unticked">
+            <div className="flex gap-1.5 flex-wrap">
+              {shaped.unchecked.map((id) => (
+                <Tag key={id} mono tone="quiet">
+                  {labelFor(id)}
+                </Tag>
+              ))}
+            </div>
+          </Group>
+        )}
+
+        {shaped && shaped.notes && (
+          <Group title="Note">
+            <p style={{ color: T.textPrimary }} className="text-sm">
+              {shaped.notes}
+            </p>
+          </Group>
+        )}
+
+        {shaped && shaped.unknown && (
+          <Group title="Other recorded fields">
+            <pre
+              style={{ fontFamily: FONT_MONO, color: T.textSecondary, background: T.bg, borderColor: T.border }}
+              className="text-[11px] p-2 rounded-lg border overflow-x-auto"
+            >
+              {JSON.stringify(shaped.unknown, null, 2)}
+            </pre>
+          </Group>
+        )}
+
+        {shaped && shaped.isEmpty && (!sched || sched.isEmpty) && (
+          <p style={{ color: T.textMuted }} className="text-xs">
+            The day was opened but nothing was recorded.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Schedule({ sched }) {
+  return (
+    <Group title="Schedule changes">
+      <div className="space-y-1">
+        {sched.slots.map((s) => (
+          <Row
+            key={s.slot}
+            left={s.slot}
+            right={s.value === null ? "cleared" : `set to ${s.value}`}
+            dim={s.value === null}
+          />
+        ))}
+        {sched.tests.map((t) => (
+          <Row key={t.name} left={`${t.name} test`} right={t.due ? "marked due" : "marked not due"} dim={!t.due} />
+        ))}
+        {sched.activities.map((a) => (
+          <Row key={a.id || a.name} left="added" right={a.name} />
+        ))}
+      </div>
+    </Group>
+  );
+}
+
+function Exercise({ ex }) {
+  const substituted = Boolean(ex.sub);
+  return (
+    <div style={{ borderColor: T.border }} className="border-l-2 pl-3">
+      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+        <span
+          style={{ fontFamily: FONT_MONO, color: substituted ? T.textMuted : T.textPrimary }}
+          className="text-xs"
+        >
+          {ex.id}
+          {substituted && (
+            <>
+              <span style={{ color: T.textMuted }}> → </span>
+              <span style={{ color: T.accentAlt, fontFamily: FONT_BODY }} className="text-sm">
+                {ex.sub.name}
+              </span>
+              {ex.sub.reason && <span style={{ color: T.textMuted }}> ({ex.sub.reason})</span>}
+            </>
+          )}
+        </span>
+        {ex.done === false && <Tag tone="quiet">not ticked</Tag>}
+      </div>
+
+      {formatSets(ex.sets) && (
+        <p style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
+          {formatSets(ex.sets)}
+        </p>
+      )}
+
+      {ex.variants.map((v) => (
+        <p key={v.slug} style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
+          {formatSets(v.sets)}
+          <span style={{ color: T.textMuted, fontFamily: FONT_BODY }} className="text-xs ml-2">
+            {v.label}
+          </span>
+        </p>
+      ))}
+
+      {ex.note && (
+        <p style={{ color: T.accent }} className="text-xs mt-1">
+          📌 {ex.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------- small parts ------------------------------- */
+
+function Shell({ children }) {
+  return (
+    <div style={{ background: T.bg, fontFamily: FONT_BODY, minHeight: "100vh" }} className="w-full">
+      <FontImport />
+      <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>
+    </div>
+  );
+}
+
+function Group({ title, children }) {
+  return (
+    <div>
+      <p style={{ color: T.textSecondary }} className="text-[10px] uppercase tracking-wider mb-1.5">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function Pairs({ items }) {
+  return (
+    <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+      {items.map((i) => (
+        <Row key={i.key} left={i.label} right={i.value} />
+      ))}
+    </div>
+  );
+}
+
+function Row({ left, right, dim }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2 text-xs">
+      <span style={{ color: T.textSecondary }}>{left}</span>
+      <span style={{ fontFamily: FONT_MONO, color: dim ? T.textMuted : T.textPrimary }} className="shrink-0">
+        {right}
+      </span>
+    </div>
+  );
+}
+
+function Tag({ children, tone, mono }) {
+  const colour =
+    tone === "accent" ? T.accent : tone === "warn" ? "#C97388" : tone === "quiet" ? T.textMuted : T.textSecondary;
+  return (
+    <span
+      style={{ color: colour, borderColor: T.border, fontFamily: mono ? FONT_MONO : FONT_BODY }}
+      className="text-[11px] px-2 py-0.5 rounded-full border"
+    >
+      {children}
+    </span>
+  );
+}
+
+function Notice({ title, children, tone }) {
+  const colour = tone === "pause" ? T.accentAlt : tone === "warn" ? T.accent : T.textMuted;
+  return (
+    <div
+      style={{ background: T.card, borderColor: T.border, borderLeftColor: colour }}
+      className="rounded-2xl border border-l-4 px-4 py-3"
+    >
+      <p style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
+        {title}
+      </p>
+      <p style={{ color: T.textSecondary }} className="text-xs mt-1 leading-relaxed">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function Problem({ children }) {
+  return (
+    <div style={{ background: T.card, borderColor: "#C97388" }} className="rounded-xl border px-4 py-3">
+      <p style={{ color: "#C97388" }} className="text-sm">
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function Muted({ children }) {
+  return (
+    <p style={{ color: T.textMuted }} className="text-sm">
+      {children}
+    </p>
+  );
+}
+
+function FontImport() {
+  return (
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
+      html, body, #root { background: ${T.bg}; min-height: 100%; }
+      body { margin: 0; }
+    `}</style>
   );
 }
