@@ -5,10 +5,11 @@
 // No percentages and no adherence scoring: those need program definitions in
 // Supabase, which is Phase 5. Everything here is a raw value the client typed.
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
 import { loadAll } from "./core/data.js";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
+import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
 const PAGE = 20; // days rendered before "show earlier"
@@ -73,6 +74,19 @@ export default function CoachApp() {
   const roster = data?.roster || [];
   const person = roster.find((p) => p.id === selectedId) || roster[0] || null;
   const days = person && data ? mergeDays(data, person.id) : [];
+  // Scored for the whole roster at once, not just the selected person: the
+  // switcher shows each person's headline number, and computing it per
+  // selection would mean the coach path only ever runs for whoever is open.
+  const adherence = useMemo(
+    () => (data && data.ok ? buildAllAdherence(data.roster, data.logs, data.overrides, data.programs) : {}),
+    [data]
+  );
+  const personAdherence = person ? adherence[person.id] || null : null;
+  const pctByDay = useMemo(() => {
+    const out = {};
+    if (personAdherence) personAdherence.days.forEach((d) => (out[d.date] = d));
+    return out;
+  }, [personAdherence]);
 
   return (
     <Shell>
@@ -89,6 +103,8 @@ export default function CoachApp() {
               person={person}
               days={days.slice(0, visible)}
               total={days.length}
+              adherence={personAdherence}
+              pctByDay={pctByDay}
               onMore={() => setVisible((v) => v + PAGE)}
             />
           )}
@@ -96,7 +112,8 @@ export default function CoachApp() {
       )}
 
       <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
-        Coach dashboard {COACH_VERSION} · raw logged values. Exercise names and adherence arrive with Phase 5.
+        Coach dashboard {COACH_VERSION} · logged values with adherence scored against the program in force on each
+        day. Exercise names still show as IDs.
       </p>
     </Shell>
   );
@@ -227,7 +244,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, onMore }) {
+function PersonPanel({ person, days, total, adherence, pctByDay, onMore }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -254,9 +271,10 @@ function PersonPanel({ person, days, total, onMore }) {
         </Notice>
       ) : (
         <>
+          <Adherence person={person} adherence={adherence} />
           <div className="space-y-3">
             {days.map((d) => (
-              <DayCard key={d.day} day={d} />
+              <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} />
             ))}
           </div>
           {days.length < total && (
@@ -274,9 +292,112 @@ function PersonPanel({ person, days, total, onMore }) {
   );
 }
 
+/* ------------------------------- adherence -------------------------------- */
+
+/**
+ * The headline numbers for one person.
+ *
+ * Three things this deliberately does NOT do:
+ *
+ *   - It does not average skip days in. A travel day the client cleared on
+ *     purpose is not a day they failed, and folding it into the mean would
+ *     punish the honest use of the skip feature.
+ *   - It does not show 0% for a day with nothing to do. That reads as a
+ *     failure; "nothing scheduled" is a different fact and stays a different
+ *     label.
+ *   - It does not name the categories. They come out of whichever program was
+ *     in force, so Henna's set and Juha's set legitimately differ, and a
+ *     hardcoded list here would quietly drop any category a future program
+ *     introduces.
+ */
+// Exported for verify-adherence.mjs: the client-facing sharing toggle shipped
+// in Phase 2 proven at the policy level but never once seen rendered, which is
+// the failure mode a render test exists to prevent.
+export function Adherence({ person, adherence }) {
+  if (!adherence) return null;
+
+  if (adherence.noProgram) {
+    return (
+      <Notice tone="warn" title="No program assigned">
+        {person.name} has {adherence.unscored.length} logged day
+        {adherence.unscored.length === 1 ? "" : "s"}, but no program row is assigned to them, so there is nothing to
+        score those days against. The days below are still shown in full — only the percentages are missing. Assign a
+        program to this person in <span style={{ fontFamily: FONT_MONO }}>programs.assigned_to</span>.
+      </Notice>
+    );
+  }
+
+  const s = adherence.summary;
+  const cats = Object.keys(s.byCat);
+
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
+      <div className="flex items-baseline gap-4 flex-wrap">
+        <Figure label="Last 30 days" value={pctLabel(adherence.last30.avgPct)} big />
+        <Figure label="All time" value={pctLabel(s.avgPct)} />
+        <Figure label="Days scored" value={String(s.scoredDays)} />
+        {s.skipDays > 0 && <Figure label="Cleared" value={String(s.skipDays)} />}
+      </div>
+
+      {cats.length > 0 && (
+        <div className="mt-3 space-y-1.5">
+          {cats.map((c) => (
+            <div key={c} className="flex items-center gap-2">
+              <span style={{ color: T.textSecondary }} className="text-[11px] w-20 shrink-0 capitalize">
+                {c}
+              </span>
+              <span
+                style={{ background: T.border }}
+                className="flex-1 h-1.5 rounded-full overflow-hidden"
+                aria-hidden="true"
+              >
+                <span
+                  style={{
+                    background: s.byCat[c].pct >= 0.8 ? T.good : s.byCat[c].pct >= 0.5 ? T.accent : T.warn,
+                    width: Math.round((s.byCat[c].pct || 0) * 100) + "%",
+                    display: "block",
+                    height: "100%",
+                  }}
+                />
+              </span>
+              <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px] w-24 text-right shrink-0">
+                {pctLabel(s.byCat[c].pct)} · {s.byCat[c].done}/{s.byCat[c].total}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <p style={{ color: T.textMuted }} className="text-[10px] mt-3 leading-relaxed">
+        Scored against{" "}
+        {adherence.versionsUsed.map((v) => v.name + " (" + v.dayCount + "d)").join(", ") || "no program"}. Cleared days
+        are excluded from the averages rather than counted as zero.
+        {adherence.unscored.length > 0 &&
+          " " + adherence.unscored.length + " day(s) fall before the first program version and are not scored."}
+      </p>
+    </div>
+  );
+}
+
+function Figure({ label, value, big }) {
+  return (
+    <div>
+      <p
+        style={{ fontFamily: FONT_MONO, color: T.textPrimary }}
+        className={big ? "text-2xl font-semibold leading-none" : "text-base font-semibold leading-none"}
+      >
+        {value}
+      </p>
+      <p style={{ color: T.textMuted }} className="text-[10px] mt-1 uppercase tracking-wide">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 /* -------------------------------- day card -------------------------------- */
 
-function DayCard({ day }) {
+export function DayCard({ day, scored }) {
   const shaped = day.log ? shapeDay(day.log) : null;
   const sched = day.override ? shapeOverride(day.override) : null;
   const label = formatDay(day.day);
@@ -296,6 +417,13 @@ function DayCard({ day }) {
           </span>
         </div>
         <div className="flex gap-1.5 flex-wrap">
+          {scored && scored.skip && <Tag tone="pause">{scored.skip} — cleared</Tag>}
+          {scored && !scored.skip && scored.pct != null && (
+            <Tag tone={scored.pct >= 0.8 ? "good" : scored.pct >= 0.5 ? "accent" : "warn"} mono>
+              {pctLabel(scored.pct)} · {scored.doneCount}/{scored.total}
+            </Tag>
+          )}
+          {scored && !scored.skip && scored.pct == null && <Tag>nothing scheduled</Tag>}
           {shaped && shaped.gentler && <Tag tone="accent">Gentler week</Tag>}
           {shaped && shaped.weekType && <Tag>Week {String(shaped.weekType).toUpperCase()}</Tag>}
           {sched && sched.skip && <Tag tone="warn">Skipped · {sched.skip}</Tag>}
@@ -518,7 +646,17 @@ function Row({ left, right, dim }) {
 
 function Tag({ children, tone, mono }) {
   const colour =
-    tone === "accent" ? T.accent : tone === "warn" ? "#C97388" : tone === "quiet" ? T.textMuted : T.textSecondary;
+    tone === "accent"
+      ? T.accent
+      : tone === "good"
+      ? T.good
+      : tone === "warn"
+      ? T.warn
+      : tone === "pause"
+      ? T.accentAlt
+      : tone === "quiet"
+      ? T.textMuted
+      : T.textSecondary;
   return (
     <span
       style={{ color: colour, borderColor: T.border, fontFamily: mono ? FONT_MONO : FONT_BODY }}

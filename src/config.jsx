@@ -19,7 +19,7 @@ export const AUTH_STORAGE_KEY = "ptAppCoach_auth";
 
 // Versioned independently of the client apps. The three of them share one
 // APP_VERSION line because they ship the same engine; this one does not.
-export const COACH_VERSION = "0.1.0";
+export const COACH_VERSION = "0.2.0";
 
 // Same palette and type as the client apps, so a client's day looks the same
 // to the coach as it does to them. Kept as plain values rather than Tailwind
@@ -33,6 +33,12 @@ export const THEME = {
   textMuted: "#5C6577",
   accent: "#E3A23C",
   accentAlt: "#4CB6C4",
+  // Added in Phase 6 for adherence badges. Deliberately tokens rather than
+  // inline literals: Step 4 retheming has to cover this file, and every
+  // colour that lives here instead of in app.jsx is one less thing a THEME
+  // swap silently misses. `warn` was previously hardcoded in Tag().
+  good: "#7FB88F",
+  warn: "#C97388",
 };
 
 export const FONT_DISPLAY = "'Space Grotesk', system-ui, sans-serif";
