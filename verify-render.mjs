@@ -14,7 +14,7 @@ import fs from "fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildAllAdherence } from "./src/core/adherence.js";
-import { Adherence, DayCard } from "./src/app.jsx";
+import { Adherence, DayCard, Publisher } from "./src/app.jsx";
 import { buildNameMap } from "./src/core/names.js";
 
 const ID={juha:"1da21dd7-5f90-423b-ba6c-bf8dc3dd8dee",henna:"5b757e16-813a-46f6-be67-423ff3b093cc",joonatan:"47ba0f5b-9844-4a24-81ca-f561a7b2fc9d"};
@@ -49,5 +49,20 @@ for(const [label,date] of specimens){
   console.log(`  ${label.padEnd(22)} ${date}  badge="${shows}" ${present?"present":"MISSING"}  ${String(html.length).padStart(5)} chars`);
   if(!present) bad++;
 }
+// The publisher is a write surface, so every state it can be in must have
+// been seen rendered at least once before it ships.
+const pubRows=Object.keys(juhaLogs).map(d=>({day:d,payload:juhaLogs[d]}));
+const pub=(defaultOpen)=>renderToStaticMarkup(React.createElement(Publisher,{
+  person:{id:ID.juha,name:"Juha"}, programs, logRows:pubRows, ownerId:ID.juha, onPublished:()=>{}, defaultOpen
+}));
+const closed=pub(false), opened=pub(true);
+console.log(`  publisher collapsed  ${String(closed.length).padStart(5)} chars`);
+console.log(`  publisher open       ${String(opened.length).padStart(5)} chars`);
+if(closed.length===opened.length){console.log("    open and collapsed are identical — defaultOpen not honoured");bad++;}
+if(!/Publish a new program version/.test(closed)){console.log("    collapsed label missing");bad++;}
+for(const needle of ["Effective from","Program definition","does not change","Check"]){
+  if(!opened.includes(needle)){console.log("    open form missing: "+needle);bad++;}
+}
+if(/Publish<\/button>/.test(opened)){console.log("    Publish button rendered before any check passed");bad++;}
 console.log(bad?`\n${bad} render problem(s)`:"\nAll render checks passed.");
 process.exit(bad?1:0);

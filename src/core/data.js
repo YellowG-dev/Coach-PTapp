@@ -130,3 +130,49 @@ function localPart(email) {
 function shortId(id) {
   return "Client " + String(id).slice(0, 8);
 }
+
+/* ----------------------------- Writing (Phase 7) -------------------------- */
+
+/**
+ * Insert one new program version. Never an UPDATE of the row in force —
+ * versions are forward-only and a new version is a new row. The unique index
+ * `(assigned_to, effective_from)` is the backstop; `preflight()` in
+ * publish.js is what gives the coach a readable answer before it fires.
+ *
+ * The only write this dashboard performs. Everything else here is read-only,
+ * and that is deliberate: coach access to a client's *logs* stays read-only
+ * by design. A program is the coach's own row, not the client's data.
+ */
+export async function insertProgramVersion(row) {
+  if (!row || !row.id || !row.assigned_to || !row.effective_from) {
+    return { ok: false, error: "Nothing to publish — run the check first." };
+  }
+  const c = getClient();
+  if (!c) return { ok: false, error: "Not connected." };
+
+  try {
+    const { data, error } = await c.from("programs").insert(row).select("id, name, effective_from").single();
+    if (error) {
+      // The two failures that will actually happen both have unhelpful native
+      // text, so they are named here rather than passed through raw.
+      if (error.code === "23505") {
+        return {
+          ok: false,
+          error:
+            "A version already exists for that client on that date, or that program id is taken. Reload and pick another date.",
+        };
+      }
+      if (error.code === "42501" || /row-level security/i.test(error.message || "")) {
+        return {
+          ok: false,
+          error:
+            "The database refused the write. The usual cause is that this client has paused sharing — coach permissions require sharing to be on (is_coach_of checks sharing_enabled).",
+        };
+      }
+      return { ok: false, error: error.message };
+    }
+    return { ok: true, row: data };
+  } catch (e) {
+    return { ok: false, error: "Could not reach the server." };
+  }
+}

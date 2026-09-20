@@ -7,7 +7,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
-import { loadAll } from "./core/data.js";
+import { loadAll, insertProgramVersion } from "./core/data.js";
+import { preflight } from "./core/publish.js";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
@@ -22,6 +23,11 @@ export default function CoachApp() {
   const [loading, setLoading] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [visible, setVisible] = useState(PAGE);
+  // Bumped after a successful publish so the loader re-runs and the days are
+  // re-scored against the new version. A state key rather than re-setting
+  // `user` to a fresh object, which worked only as a side effect of the
+  // effect's dependency being compared by identity.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let dead = false;
@@ -59,7 +65,7 @@ export default function CoachApp() {
     return () => {
       dead = true;
     };
-  }, [user]);
+  }, [user, reloadKey]);
 
   useEffect(() => setVisible(PAGE), [selectedId]);
 
@@ -121,6 +127,10 @@ export default function CoachApp() {
               adherence={personAdherence}
               pctByDay={pctByDay}
               names={names}
+              programs={data.programs || []}
+              logRows={(data.logs || {})[person.id] || []}
+              ownerId={user.id}
+              onPublished={() => setReloadKey((k) => k + 1)}
               onMore={() => setVisible((v) => v + PAGE)}
             />
           )}
@@ -260,7 +270,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, adherence, pctByDay, names, onMore }) {
+function PersonPanel({ person, days, total, adherence, pctByDay, names, programs, logRows, ownerId, onPublished, onMore }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -304,7 +314,218 @@ function PersonPanel({ person, days, total, adherence, pctByDay, names, onMore }
           )}
         </>
       )}
+
+      <Publisher
+        person={person}
+        programs={programs}
+        logRows={logRows}
+        ownerId={ownerId}
+        onPublished={onPublished}
+      />
     </>
+  );
+}
+
+/* -------------------------------- publishing ------------------------------ */
+
+/**
+ * Paste-and-validate publishing of a new program version.
+ *
+ * Collapsed by default and placed last, because this is the one write in an
+ * otherwise read-only dashboard and it should not sit in the way of reading.
+ *
+ * Two-step by construction: the Publish button does not exist until a check
+ * has passed, and any edit to the paste or the date discards that result. It
+ * is not possible to check one thing and publish another.
+ *
+ * All state is local to this component. The blank page that shipped in the
+ * first Phase 6 build came from hooks added to CoachApp below its early
+ * returns; keeping this self-contained means it cannot reach them.
+ */
+export function Publisher({ person, programs, logRows, ownerId, onPublished, defaultOpen }) {
+  // `defaultOpen` exists so the open form can be render-tested. Without it the
+  // harness could only ever see the collapsed button and would report two
+  // passing states that were the same 203 characters twice.
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const [text, setText] = useState("");
+  const [when, setWhen] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // tomorrow: forward-only, and not today by accident
+    return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+  });
+  const [result, setResult] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [published, setPublished] = useState(null);
+
+  // Any change invalidates a previous check, so the button cannot outlive it.
+  const edit = (setter) => (v) => {
+    setResult(null);
+    setPublished(null);
+    setter(v);
+  };
+
+  const runCheck = useCallback(() => {
+    setResult(
+      preflight({
+        person,
+        text,
+        effectiveFrom: when,
+        existingRows: programs,
+        logRows,
+        ownerId,
+      })
+    );
+  }, [person, text, when, programs, logRows, ownerId]);
+
+  const doPublish = useCallback(async () => {
+    if (!result || !result.ok || !result.row) return;
+    setBusy(true);
+    const r = await insertProgramVersion(result.row);
+    setBusy(false);
+    setPublished(r);
+    if (r.ok) {
+      setResult(null);
+      setText("");
+      // Re-load, so the days above are immediately re-scored against the
+      // version just published. Without this the dashboard would keep showing
+      // percentages from the superseded program until a manual refresh.
+      if (onPublished) onPublished();
+    }
+  }, [result, onPublished]);
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{ borderColor: T.border, color: T.textSecondary }}
+        className="w-full mt-4 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
+      >
+        Publish a new program version for {person.name}
+      </button>
+    );
+  }
+
+  const findings = result && result.validation ? result.validation.findings : [];
+  const info = findings.filter((f) => f.severity === "info");
+
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <p style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
+          Publish a version for {person.name}
+        </p>
+        <button
+          onClick={() => setOpen(false)}
+          style={{ color: T.textSecondary }}
+          className="text-xs font-semibold focus:outline-none focus-visible:underline"
+        >
+          Close
+        </button>
+      </div>
+
+      <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
+        This adds a new row; the version in force is never overwritten.{" "}
+        <strong style={{ color: T.textSecondary }}>It does not change {person.name}'s app</strong> — the client apps
+        build their program in from their own repo and do not read this table. What it changes today is how the days
+        above are scored from the effective date onward.
+      </p>
+
+      <label style={{ color: T.textSecondary }} className="text-[11px] block mt-3 mb-1">
+        Effective from
+      </label>
+      <input
+        type="date"
+        value={when}
+        onChange={(e) => edit(setWhen)(e.target.value)}
+        style={{ fontFamily: FONT_MONO, color: T.textPrimary, background: T.bg, borderColor: T.border }}
+        className="text-xs px-2 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+      />
+
+      <label style={{ color: T.textSecondary }} className="text-[11px] block mt-3 mb-1">
+        Program definition (JSON)
+      </label>
+      <textarea
+        value={text}
+        onChange={(e) => edit(setText)(e.target.value)}
+        rows={6}
+        placeholder='Paste the definition object, e.g. {"id":"juha","slots":[…],"schedule":{…},"blocks":{…}}'
+        style={{ fontFamily: FONT_MONO, color: T.textPrimary, background: T.bg, borderColor: T.border }}
+        className="w-full text-[10px] p-2 rounded-lg border focus:outline-none focus-visible:ring-2"
+      />
+
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={runCheck}
+          disabled={!text.trim()}
+          style={{ borderColor: T.border, color: text.trim() ? T.textPrimary : T.textMuted }}
+          className="text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+        >
+          Check
+        </button>
+        {result && result.ok && (
+          <button
+            onClick={doPublish}
+            disabled={busy}
+            style={{ background: T.good, color: "#14171C" }}
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none focus-visible:ring-2"
+          >
+            {busy ? "Publishing…" : "Publish"}
+          </button>
+        )}
+      </div>
+
+      {result && (
+        <div className="mt-3 space-y-2">
+          {result.inForce && (
+            <p style={{ color: T.textMuted }} className="text-[11px]">
+              Replacing from {when} onward: {result.inForce.name} (effective {String(result.inForce.effective_from)})
+            </p>
+          )}
+          {result.blocking.map((b, i) => (
+            <p key={"b" + i} style={{ color: T.warn }} className="text-[11px] leading-relaxed">
+              ✕ {b}
+            </p>
+          ))}
+          {result.warnings.map((w, i) => (
+            <p key={"w" + i} style={{ color: T.accent }} className="text-[11px] leading-relaxed">
+              ⚠ {w}
+            </p>
+          ))}
+          {result.ok && (
+            <p style={{ color: T.good }} className="text-[11px]">
+              ✓ Checks passed. {info.length} informational change{info.length === 1 ? "" : "s"}
+              {result.validation ? ` · ${result.validation.summary.idsAfter} IDs, ${result.validation.summary.idsLogged} seen in history` : ""}.
+              {result.row ? ` Will insert as ${result.row.id}.` : ""}
+            </p>
+          )}
+          {info.length > 0 && (
+            <details>
+              <summary style={{ color: T.textSecondary }} className="text-[11px] cursor-pointer">
+                Show {info.length} informational finding{info.length === 1 ? "" : "s"}
+              </summary>
+              <div className="mt-1 space-y-0.5">
+                {info.map((f, i) => (
+                  <p key={i} style={{ color: T.textMuted }} className="text-[10px]">
+                    {f.message}
+                  </p>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
+      {published && (
+        <p
+          style={{ color: published.ok ? T.good : T.warn }}
+          className="text-[11px] mt-3 leading-relaxed"
+        >
+          {published.ok
+            ? `Published ${published.row.id}, effective ${published.row.effective_from}. The days above have been re-scored.`
+            : "✕ " + published.error}
+        </p>
+      )}
+    </div>
   );
 }
 
