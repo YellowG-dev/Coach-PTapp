@@ -204,13 +204,13 @@ function SignIn() {
           <button
             onClick={submit}
             disabled={busy}
-            style={{ background: T.accent, color: "#14171C", opacity: busy ? 0.6 : 1 }}
+            style={{ background: T.accent, color: T.onAccent, opacity: busy ? 0.6 : 1 }}
             className="w-full mt-2 text-sm font-semibold py-2 rounded-lg focus:outline-none focus-visible:ring-2"
           >
             {busy ? "Sending…" : "Send sign-in link"}
           </button>
           {status && (
-            <p style={{ color: status.ok ? T.accentAlt : "#C97388" }} className="text-xs mt-2">
+            <p style={{ color: status.ok ? T.accentAlt : T.warn }} className="text-xs mt-2">
               {status.text}
             </p>
           )}
@@ -253,7 +253,7 @@ function Switcher({ roster, selectedId, onSelect }) {
             onClick={() => onSelect(p.id)}
             style={{
               background: active ? T.accent : "transparent",
-              color: active ? "#14171C" : T.textSecondary,
+              color: active ? T.onAccent : T.textSecondary,
               borderColor: active ? T.accent : T.border,
             }}
             className="text-sm font-semibold px-3.5 py-2 rounded-xl border text-left focus:outline-none focus-visible:ring-2"
@@ -466,7 +466,7 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
           <button
             onClick={doPublish}
             disabled={busy}
-            style={{ background: T.good, color: "#14171C" }}
+            style={{ background: T.good, color: T.onAccent }}
             className="text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none focus-visible:ring-2"
           >
             {busy ? "Publishing…" : "Publish"}
@@ -923,8 +923,8 @@ function Notice({ title, children, tone }) {
 
 function Problem({ children }) {
   return (
-    <div style={{ background: T.card, borderColor: "#C97388" }} className="rounded-xl border px-4 py-3">
-      <p style={{ color: "#C97388" }} className="text-sm">
+    <div style={{ background: T.card, borderColor: T.warn }} className="rounded-xl border px-4 py-3">
+      <p style={{ color: T.warn }} className="text-sm">
         {children}
       </p>
     </div>

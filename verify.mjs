@@ -186,5 +186,16 @@ check("both test key spellings parsed", tf.tests.length, 2);
 check("labels fall back to the raw ID", labelFor("lg-1"), "lg-1");
 check("known label resolves", labelFor("chk-weigh"), "Weigh-in");
 
+// --- Step 4 Phase 4: every colour comes from THEME in config.jsx ---
+// The client apps carried hardcoded colours copied from one client's palette
+// into all three; this keeps the same thing from creeping into the coach app.
+// Read as text so this suite still needs no node_modules.
+{
+  const { readFileSync } = await import("fs");
+  const coachApp = readFileSync("./src/app.jsx", "utf8");
+  const literals = coachApp.match(/"#[0-9A-Fa-f]{3,8}"|rgba\([0-9., ]*\)/g) || [];
+  check("no colour literal in coach app.jsx — use THEME", [...new Set(literals)].sort(), []);
+}
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);
 process.exit(failures === 0 ? 0 : 1);

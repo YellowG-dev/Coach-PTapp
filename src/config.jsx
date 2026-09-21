@@ -19,7 +19,7 @@ export const AUTH_STORAGE_KEY = "ptAppCoach_auth";
 
 // Versioned independently of the client apps. The three of them share one
 // APP_VERSION line because they ship the same engine; this one does not.
-export const COACH_VERSION = "0.4.1";
+export const COACH_VERSION = "0.4.2";
 
 // Same palette and type as the client apps, so a client's day looks the same
 // to the coach as it does to them. Kept as plain values rather than Tailwind
@@ -39,6 +39,10 @@ export const THEME = {
   // swap silently misses. `warn` was previously hardcoded in Tag().
   good: "#7FB88F",
   warn: "#C97388",
+  // Text on any filled swatch: the accent button, the "good" badge. Was a
+  // literal in three places in app.jsx. Already dark — the coach never had the
+  // white-on-amber problem Step 4 Phase 1 fixed in the client apps (8.13:1).
+  onAccent: "#14171C",
 };
 
 export const FONT_DISPLAY = "'Space Grotesk', system-ui, sans-serif";
