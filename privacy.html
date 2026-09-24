@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Privacy notice — yellowg PT</title>
+<meta name="theme-color" content="#10131A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10131A; --card:#1A1F29; --line:#2A3140;
+    --text:#EEF0F3; --muted:#8891A3; --accent:#E3A23C;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{background:var(--bg)}
+  body{
+    margin:0; color:var(--text);
+    font-family:'IBM Plex Sans',system-ui,sans-serif;
+    font-size:16px; line-height:1.65;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:64ch; margin:0 auto; padding:2.5rem 1.25rem 4rem}
+  h1{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-size:1.75rem; line-height:1.2; font-weight:700; margin:0 0 .35rem;
+  }
+  h2{
+    font-family:'Space Grotesk',system-ui,sans-serif;
+    font-size:1.05rem; font-weight:700; margin:2.25rem 0 .5rem;
+    padding-top:1.25rem; border-top:1px solid var(--line);
+  }
+  h2:first-of-type{border-top:0; padding-top:0}
+  p,li{margin:0 0 .85rem}
+  ul{padding-left:1.15rem; margin:0 0 .85rem}
+  li{margin-bottom:.4rem}
+  .lede{color:var(--muted); margin-bottom:2rem}
+  a{color:var(--accent)}
+  a:focus-visible,:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+  .box{
+    background:var(--card); border:1px solid var(--line);
+    border-left:3px solid var(--accent); border-radius:10px;
+    padding:1rem 1.1rem; margin:1.25rem 0;
+  }
+  .box p:last-child{margin-bottom:0}
+  table{border-collapse:collapse; width:100%; font-size:.94rem; margin:0 0 .85rem}
+  th,td{text-align:left; vertical-align:top; padding:.5rem .6rem; border-bottom:1px solid var(--line)}
+  th{color:var(--muted); font-weight:600}
+  .scroll{overflow-x:auto}
+  footer{color:var(--muted); font-size:.9rem; margin-top:3rem; padding-top:1.25rem; border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Privacy notice</h1>
+<p class="lede">How the yellowg PT training app handles your personal data. Last updated 24 September 2026.</p>
+
+<h2>Who is responsible</h2>
+<p>Juha Elo, Finland, is the controller of the data described here. Questions, requests and complaints: <a href="mailto:juha@yellowg.fi">juha@yellowg.fi</a>.</p>
+<p>The app is a personal tool used with a small number of coaching clients. It is not sold, carries no advertising, and no data is shared with advertisers or sold to anyone.</p>
+
+<h2>What is collected</h2>
+<div class="scroll">
+<table>
+  <tr><th>Data</th><th>Where it comes from</th></tr>
+  <tr><td>Email address and display name</td><td>You, when the account is created</td></tr>
+  <tr><td>Daily training log: exercises, weights and repetitions, substitutions, notes, body weight, self-rated symptom scales, and other items your programme tracks</td><td>You, as you use the app</td></tr>
+  <tr><td>Your training programme and calendar changes</td><td>Written by your coach; changed by you in the app</td></tr>
+  <tr><td>App settings, such as maximum heart rate and theme</td><td>You</td></tr>
+  <tr><td>If you connect a wearable: sleep, readiness or recovery, resting heart rate, heart-rate variability, steps, and workout summaries (sport, duration, distance, average and maximum heart rate)</td><td>Oura or Polar, after you give them permission</td></tr>
+</table>
+</div>
+<p>Much of this is health data, which the law treats as a special category needing particular care. There is no tracking, no advertising identifiers and no third-party analytics in the app.</p>
+
+<h2>Why it is processed, and on what basis</h2>
+<p>The purpose is to deliver personal training: to show you your programme, record what you did, and let your coach see how training is going so the programme can be adjusted.</p>
+<p>Health data is processed on the basis of your explicit consent. You give that consent when you start using the app, and again separately for each wearable you choose to connect. You can withdraw it at any time — see below — and withdrawing does not affect processing that already happened.</p>
+
+<h2>Who can see your data</h2>
+<ul>
+  <li><strong>You</strong>, in the app.</li>
+  <li><strong>Your coach</strong>, while sharing is switched on. The app has a sharing switch you control; turning it off cuts your coach's access immediately, and your own use of the app continues unaffected.</li>
+  <li>No other client can see your data. Access is enforced by the database itself, not only by the app.</li>
+</ul>
+
+<h2>Services used to run the app</h2>
+<ul>
+  <li><strong>Supabase</strong> — database, sign-in and data storage. The database is hosted in the European Union.</li>
+  <li><strong>Resend</strong> — sends sign-in emails.</li>
+  <li><strong>Cloudflare</strong> — domain name service and email forwarding for the yellowg.fi address.</li>
+  <li><strong>GitHub Pages</strong> — serves the app's files. Your training data is not stored there.</li>
+  <li><strong>Oura Health Oy</strong> and <strong>Polar Electro Oy</strong> — only if you connect them. They are responsible for their own services and their own privacy notices; the app reads the data you have permitted it to read.</li>
+</ul>
+
+<h2>Where data is stored, and for how long</h2>
+<p>Your data is stored in the Supabase database in the EU, and a copy of your own log is kept on the device you use, so the app works without a connection.</p>
+<p>Data is kept for as long as the coaching relationship lasts. When it ends, or whenever you ask, your account and its data are deleted within 30 days. Deleting the app from your phone does not delete data from the database — ask, and it is removed properly.</p>
+
+<h2>Wearable connections</h2>
+<p>Connecting Oura or Polar sends you to that company's own consent page, where you see what you are allowing before you agree. Access can be withdrawn from either side: in the app, or in your Oura or Polar account settings. Data already imported stays in the app until you ask for it to be deleted.</p>
+<p>The keys that let the app read your wearable data are stored so that neither your coach nor any client can read them.</p>
+
+<h2>Your rights</h2>
+<p>You can ask for a copy of your data, have mistakes corrected, have everything deleted, get your data in a portable file, object to processing, or withdraw your consent. Write to <a href="mailto:juha@yellowg.fi">juha@yellowg.fi</a> and expect an answer within a month.</p>
+<div class="box">
+  <p>If you think your data has been handled improperly, you can complain to the Finnish Data Protection Ombudsman, <a href="https://tietosuoja.fi" rel="noopener">tietosuoja.fi</a>. Raising it with your coach first is usually faster, but it is not a requirement.</p>
+</div>
+
+<h2>Changes to this notice</h2>
+<p>If what the app collects changes in a way that matters to you, this page is updated and you are told directly before the change takes effect.</p>
+
+<footer>
+  <p>yellowg PT — a private training app. Contact: <a href="mailto:juha@yellowg.fi">juha@yellowg.fi</a>. See also the <a href="./terms.html">terms of use</a>.</p>
+</footer>
+
+</div>
+</body>
+</html>
