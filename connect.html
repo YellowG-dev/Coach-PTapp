@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Connect a wearable — yellowg PT</title>
+<meta name="theme-color" content="#10131A">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10131A; --card:#1A1F29; --line:#2A3140;
+    --text:#EEF0F3; --muted:#8891A3; --dim:#5C6577;
+    --accent:#E3A23C; --teal:#4CB6C4; --green:#7FB88F; --rose:#C97388;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{background:var(--bg)}
+  body{margin:0;color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;line-height:1.6}
+  .wrap{max-width:30rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+  h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.5rem;margin:0 0 .25rem}
+  .lede{color:var(--muted);font-size:.95rem;margin:0 0 1.75rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem;margin-bottom:1rem}
+  h2{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1rem;margin:0 0 .75rem}
+  label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:.3rem}
+  input{
+    width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);
+    border-radius:9px;padding:.65rem .75rem;font:inherit;font-size:1rem;margin-bottom:.75rem
+  }
+  input[inputmode="numeric"]{font-family:'IBM Plex Mono',monospace;letter-spacing:.25em}
+  button{
+    font:inherit;font-weight:600;font-size:.9rem;border-radius:9px;padding:.65rem 1rem;
+    border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;width:100%
+  }
+  button.primary{background:var(--accent);color:#14171C;border-color:var(--accent)}
+  button.teal{background:var(--teal);color:#14171C;border-color:var(--teal)}
+  button:disabled{opacity:.5;cursor:default}
+  .row{display:flex;gap:.5rem;margin-top:.5rem}
+  .row button{width:auto;flex:1}
+  .muted{color:var(--muted);font-size:.85rem}
+  .dim{color:var(--dim);font-size:.8rem}
+  .msg{font-size:.85rem;margin-top:.75rem;padding:.6rem .75rem;border-radius:9px;border:1px solid var(--line)}
+  .msg.err{color:var(--rose);border-color:rgba(201,115,136,.4);background:rgba(201,115,136,.1)}
+  .msg.ok{color:var(--green);border-color:rgba(127,184,143,.4);background:rgba(127,184,143,.1)}
+  pre{font-family:'IBM Plex Mono',monospace;font-size:.75rem;color:var(--muted);white-space:pre-wrap;word-break:break-word;margin:.5rem 0 0}
+  .status{display:flex;justify-content:space-between;align-items:baseline;gap:.5rem;padding:.5rem 0;border-top:1px solid var(--line)}
+  .status:first-of-type{border-top:0}
+  .pill{font-size:.75rem;font-family:'IBM Plex Mono',monospace;padding:.15rem .5rem;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+  .pill.on{color:var(--green);border-color:rgba(127,184,143,.4)}
+  .pill.bad{color:var(--rose);border-color:rgba(201,115,136,.4)}
+  .hidden{display:none}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Connect a wearable</h1>
+<p class="lede">Test page. Sign in with your app account, then connect Oura or Polar.</p>
+
+<!-- Step 1 — sign in -->
+<section id="signin" class="card">
+  <h2>Sign in</h2>
+  <div id="emailStep">
+    <label for="email">Email</label>
+    <input id="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
+    <button id="sendBtn" class="primary">Send code</button>
+  </div>
+  <div id="codeStep" class="hidden">
+    <label for="code">6-digit code from your email</label>
+    <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+    <button id="verifyBtn" class="primary">Sign in</button>
+    <div class="row"><button id="backBtn">Use a different email</button></div>
+  </div>
+  <div id="signinMsg"></div>
+</section>
+
+<!-- Step 2 — connections -->
+<section id="panel" class="card hidden">
+  <h2>Your connections</h2>
+  <p class="muted" id="who"></p>
+  <div id="statusList"></div>
+  <div class="row">
+    <button id="ouraBtn" class="primary">Connect Oura</button>
+    <button id="polarBtn" class="teal">Connect Polar</button>
+  </div>
+  <div class="row">
+    <button id="sync7">Sync Oura · 7 days</button>
+    <button id="sync90">Sync Oura · 90 days</button>
+  </div>
+  <div class="row"><button id="signoutBtn">Sign out</button></div>
+  <div id="panelMsg"></div>
+  <pre id="out"></pre>
+</section>
+
+<p class="dim">Connecting sends you to Oura or Polar to approve access. You come back to a confirmation page on this site. Tokens are stored server-side and are never visible to this page.</p>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const SUPABASE_URL = "https://qpkdqyazdzhoohowkouy.supabase.co";
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwa2RxeWF6ZHpob29ob3drb3V5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxMTQ3NjEsImV4cCI6MjEwMzY5MDc2MX0.-HpRydphrHIeEGmJoDN0NxGGDFuqMWDczPkTeINpglc";
+
+const sb = createClient(SUPABASE_URL, ANON_KEY, {
+  auth: { storageKey: "ptAppConnectTest_auth", persistSession: true, autoRefreshToken: true },
+});
+
+const $ = (id) => document.getElementById(id);
+const show = (el, on) => el.classList.toggle("hidden", !on);
+function msg(target, text, kind) {
+  target.innerHTML = text ? `<div class="msg ${kind || ""}">${text}</div>` : "";
+}
+
+/* ------------------------------- sign in -------------------------------- */
+
+$("sendBtn").onclick = async () => {
+  const email = $("email").value.trim();
+  if (!email) return msg($("signinMsg"), "Enter your email first.", "err");
+  $("sendBtn").disabled = true;
+  msg($("signinMsg"), "Sending…");
+  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+  $("sendBtn").disabled = false;
+  if (error) return msg($("signinMsg"), escape(error.message), "err");
+  show($("emailStep"), false);
+  show($("codeStep"), true);
+  msg($("signinMsg"), "Code sent. It replaces any earlier code.", "ok");
+  $("code").focus();
+};
+
+$("backBtn").onclick = () => {
+  show($("codeStep"), false);
+  show($("emailStep"), true);
+  msg($("signinMsg"), "");
+};
+
+$("verifyBtn").onclick = async () => {
+  const email = $("email").value.trim();
+  const token = $("code").value.trim();
+  if (token.length < 6) return msg($("signinMsg"), "Enter the 6-digit code.", "err");
+  $("verifyBtn").disabled = true;
+  msg($("signinMsg"), "Checking…");
+  const { error } = await sb.auth.verifyOtp({ email, token, type: "email" });
+  $("verifyBtn").disabled = false;
+  if (error) return msg($("signinMsg"), escape(error.message), "err");
+  await afterSignIn();
+};
+
+$("signoutBtn").onclick = async () => {
+  await sb.auth.signOut();
+  location.reload();
+};
+
+/* ----------------------------- connections ------------------------------ */
+
+function escape(s) {
+  return String(s).replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+}
+
+async function afterSignIn() {
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) return;
+  show($("signin"), false);
+  show($("panel"), true);
+  $("who").textContent = `Signed in as ${user.email}`;
+  await refreshStatus();
+}
+
+async function refreshStatus() {
+  const { data, error } = await sb
+    .from("wearable_connections")
+    .select("vendor, status, connected_at, last_synced_at, last_error");
+  const list = $("statusList");
+  if (error) {
+    list.innerHTML = `<p class="muted">Could not read status: ${escape(error.message)}</p>`;
+    return;
+  }
+  const rows = ["oura", "polar"].map((v) => {
+    const r = (data || []).find((x) => x.vendor === v);
+    const cls = !r ? "" : r.status === "connected" ? "on" : "bad";
+    const label = !r ? "not connected" : r.status;
+    const synced = r?.last_synced_at ? `synced ${new Date(r.last_synced_at).toLocaleString()}` : "never synced";
+    const err = r?.last_error ? `<br><span class="dim">${escape(r.last_error).slice(0, 200)}</span>` : "";
+    return `<div class="status"><div>${v === "oura" ? "Oura" : "Polar"}<br><span class="dim">${r ? synced : "—"}</span>${err}</div>
+            <span class="pill ${cls}">${label}</span></div>`;
+  });
+  list.innerHTML = rows.join("");
+}
+
+async function callFunction(name, body) {
+  const { data: { session } } = await sb.auth.getSession();
+  if (!session) throw new Error("session expired — sign in again");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/${name}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  if (!res.ok || json.error) throw new Error(json.error || `HTTP ${res.status}`);
+  return json;
+}
+
+async function connect(vendor) {
+  msg($("panelMsg"), `Preparing ${vendor}…`);
+  try {
+    const { url } = await callFunction("wearable-connect", { vendor });
+    location.href = url;
+  } catch (e) {
+    msg($("panelMsg"), escape(e.message), "err");
+  }
+}
+
+$("ouraBtn").onclick = () => connect("oura");
+$("polarBtn").onclick = () => connect("polar");
+
+async function sync(days) {
+  msg($("panelMsg"), `Syncing ${days} days…`);
+  $("out").textContent = "";
+  try {
+    const result = await callFunction("wearable-sync", { vendor: "oura", days });
+    msg($("panelMsg"), `Done — ${result.days} days, ${result.workouts} workouts.`, "ok");
+    $("out").textContent = JSON.stringify(result, null, 2);
+    await refreshStatus();
+  } catch (e) {
+    msg($("panelMsg"), escape(e.message), "err");
+  }
+}
+
+$("sync7").onclick = () => sync(7);
+$("sync90").onclick = () => sync(90);
+
+// Already signed in from an earlier visit?
+const { data: { session } } = await sb.auth.getSession();
+if (session) await afterSignIn();
+</script>
+
+</div>
+</body>
+</html>

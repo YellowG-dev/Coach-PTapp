@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wearable connection — yellowg PT</title>
+<meta name="theme-color" content="#10131A">
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#10131A; --line:#2A3140; --text:#EEF0F3; --muted:#8891A3;
+    --accent:#E3A23C; --rose:#C97388;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *,*::before,*::after{box-sizing:inherit}
+  html,body{background:var(--bg);height:100%}
+  body{
+    margin:0;display:flex;align-items:center;justify-content:center;padding:1.5rem;
+    color:var(--text);font-family:'IBM Plex Sans',system-ui,sans-serif;line-height:1.65
+  }
+  .card{max-width:34ch;text-align:center}
+  h1{font-family:'Space Grotesk',system-ui,sans-serif;font-size:1.35rem;margin:0 0 .6rem;color:var(--accent)}
+  h1.bad{color:var(--rose)}
+  p{margin:0 0 1.25rem;color:var(--muted)}
+  a{color:var(--accent);font-size:.9rem}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1 id="title">Connecting…</h1>
+  <p id="body"></p>
+  <a href="./connect.html" id="back">Back to connections</a>
+</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  const vendor = q.get("vendor") === "polar" ? "Polar" : q.get("vendor") === "oura" ? "Oura" : "Your device";
+  const status = q.get("status") || "failed";
+
+  const cases = {
+    ok: [
+      `${vendor} connected`,
+      `Your ${vendor} data will start appearing in the app shortly. You can close this page and go back to the app.`,
+      false,
+    ],
+    denied: [
+      "Not connected",
+      "You declined, so nothing was shared. You can try again whenever you like.",
+      true,
+    ],
+    expired: [
+      "Link expired",
+      "That connection link is no longer valid. Start again from the Connect button in the app.",
+      true,
+    ],
+    incomplete: [
+      "Something went wrong",
+      "The link was incomplete. Start again from the Connect button in the app.",
+      true,
+    ],
+    failed: [
+      "Connection failed",
+      "The connection could not be completed. Try again; if it keeps failing, tell your coach.",
+      true,
+    ],
+  };
+
+  const [title, body, bad] = cases[status] || cases.failed;
+  document.getElementById("title").textContent = title;
+  document.getElementById("title").classList.toggle("bad", bad);
+  document.getElementById("body").textContent = body;
+  document.title = `${title} — yellowg PT`;
+</script>
+</body>
+</html>
