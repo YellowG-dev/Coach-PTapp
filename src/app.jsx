@@ -12,6 +12,8 @@ import { preflight } from "./core/publish.js";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
+import { buildRecovery, connectionLabel, fmtSleep, fmtNum } from "./core/recovery.js";
+import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
 const PAGE = 20; // days rendered before "show earlier"
@@ -92,6 +94,17 @@ export default function CoachApp() {
   }, [personAdherence]);
   // Built from this person's own programs plus their own ad-hoc activities,
   // so a name can never leak from one client's program into another's day.
+  // Same hook discipline as the two above: computed for the selected person,
+  // but declared here so the hook count never changes between renders.
+  const recovery = useMemo(() => {
+    if (!data || !data.ok || !person) return null;
+    const w = data.wearables || {};
+    return buildRecovery((w.days || {})[person.id] || [], (w.workouts || {})[person.id] || []);
+  }, [data, person]);
+  const connections = useMemo(() => {
+    if (!data || !data.ok || !person) return [];
+    return ((data.wearables || {}).connections || []).filter((c) => c.user_id === person.id);
+  }, [data, person]);
   const names = useMemo(() => {
     if (!data || !data.ok || !person) return {};
     const versions = (data.programs || [])
@@ -126,6 +139,8 @@ export default function CoachApp() {
               total={days.length}
               adherence={personAdherence}
               pctByDay={pctByDay}
+              recovery={recovery}
+              connections={connections}
               names={names}
               programs={data.programs || []}
               logRows={(data.logs || {})[person.id] || []}
@@ -270,7 +285,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, adherence, pctByDay, names, programs, logRows, ownerId, onPublished, onMore }) {
+function PersonPanel({ person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, ownerId, onPublished, onMore }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -290,6 +305,10 @@ function PersonPanel({ person, days, total, adherence, pctByDay, names, programs
           complete — only the label is missing.
         </Notice>
       )}
+
+      {/* Above the logged days on purpose: a person can have wearable data
+          before they have logged a single session, and that is worth seeing. */}
+      <Recovery recovery={recovery} connections={connections} person={person} />
 
       {total === 0 ? (
         <Notice tone="quiet" title="No days logged yet">
@@ -525,6 +544,154 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
             : "✕ " + published.error}
         </p>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------- recovery -------------------------------- */
+
+/**
+ * Sleep, readiness and heart data from a connected wearable, next to the
+ * adherence numbers — the point being that a poor week with three bad nights
+ * behind it is a different conversation from a poor week without them.
+ *
+ * Nothing here is scored or judged. It reports what the device recorded, with
+ * gaps left as gaps: a night the ring missed shows a dash, never a zero.
+ */
+export function Recovery({ recovery, connections, person }) {
+  const conns = connections || [];
+  if (!recovery) {
+    if (!conns.length) return null; // nothing connected, nothing to say
+    return (
+      <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
+            Recovery
+          </span>
+          {conns.map((c) => {
+            const l = connectionLabel(c);
+            return (
+              <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
+                {c.vendor} · {l.text}
+              </Tag>
+            );
+          })}
+        </div>
+        <p style={{ color: T.textMuted }} className="text-[11px] mt-2">
+          Connected, but no readings have arrived yet.
+        </p>
+      </div>
+    );
+  }
+
+  const { latest, avg7, avg30, series, sessions30, sessionMinutes30, bySport, nights } = recovery;
+  const hasSeries = series.some((p) => p.readiness != null || p.sleepH != null);
+
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
+          Recovery
+        </span>
+        {conns.map((c) => {
+          const l = connectionLabel(c);
+          return (
+            <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
+              {c.vendor} · {l.text}
+            </Tag>
+          );
+        })}
+      </div>
+
+      <div className="flex items-baseline gap-4 flex-wrap">
+        <Figure label={latest ? "Sleep · " + latest.day.slice(5) : "Sleep"} value={fmtSleep(latest?.sleep_minutes)} big />
+        <Figure label="Readiness" value={fmtNum(latest?.readiness)} />
+        <Figure label="Resting HR" value={fmtNum(latest?.resting_hr)} />
+        <Figure label="HRV" value={fmtNum(latest?.hrv)} />
+        <Figure label="Steps" value={latest?.steps != null ? Number(latest.steps).toLocaleString() : "—"} />
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap mt-2.5">
+        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
+          7-day: {fmtSleep(avg7.sleep)} · readiness {fmtNum(avg7.readiness)} · RHR {fmtNum(avg7.rhr)} · HRV{" "}
+          {fmtNum(avg7.hrv)}
+        </span>
+        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
+          30-day: {fmtSleep(avg30.sleep)} · readiness {fmtNum(avg30.readiness)} · RHR {fmtNum(avg30.rhr)}
+        </span>
+      </div>
+
+      {hasSeries && (
+        <div style={{ width: "100%", height: 140 }} className="mt-3">
+          <ResponsiveContainer>
+            <LineChart data={series} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
+              <CartesianGrid stroke={T.border} strokeDasharray="3 3" vertical={false} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: T.textMuted, fontSize: 10 }}
+                axisLine={{ stroke: T.border }}
+                tickLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                yAxisId="left"
+                domain={[0, 100]}
+                tick={{ fill: T.textMuted, fontSize: 10 }}
+                axisLine={false}
+                tickLine={false}
+                width={30}
+              />
+              <YAxis yAxisId="right" orientation="right" hide domain={[0, 12]} />
+              <Tooltip
+                contentStyle={{
+                  background: T.bg,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 8,
+                  fontFamily: FONT_MONO,
+                  fontSize: 11,
+                }}
+                labelStyle={{ color: T.textSecondary }}
+                formatter={(v, name) => [name === "Sleep (h)" ? `${v} h` : v, name]}
+              />
+              <Line
+                yAxisId="left"
+                type="monotone"
+                dataKey="readiness"
+                name="Readiness"
+                stroke={T.accent}
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="sleepH"
+                name="Sleep (h)"
+                stroke={T.good}
+                strokeWidth={2}
+                dot={false}
+                connectNulls
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {sessions30 > 0 && (
+        <p style={{ color: T.textSecondary }} className="text-[11px] mt-2">
+          {sessions30} recorded session{sessions30 === 1 ? "" : "s"} in 30 days · {sessionMinutes30} min ·{" "}
+          <span style={{ color: T.textMuted }}>
+            {bySport.map((s) => `${s.sport} ${s.n}`).join(", ")}
+          </span>
+        </p>
+      )}
+
+      <p style={{ color: T.textMuted }} className="text-[10px] mt-2 leading-relaxed">
+        {nights} night{nights === 1 ? "" : "s"} with a sleep reading in the last 120 days. Amber is readiness, green is
+        sleep hours. Missing nights are gaps, not zeroes. Oura's auto-detected walking and housework are stored but not
+        counted as sessions here.
+      </p>
     </div>
   );
 }
