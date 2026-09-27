@@ -99,7 +99,7 @@ export default function CoachApp() {
   const recovery = useMemo(() => {
     if (!data || !data.ok || !person) return null;
     const w = data.wearables || {};
-    return buildRecovery((w.days || {})[person.id] || [], (w.workouts || {})[person.id] || []);
+    return buildRecovery((w.days || {})[person.id] || [], (w.workouts || {})[person.id] || [], person.id);
   }, [data, person]);
   const connections = useMemo(() => {
     if (!data || !data.ok || !person) return [];
