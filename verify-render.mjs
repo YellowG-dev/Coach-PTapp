@@ -60,7 +60,7 @@ console.log(`  publisher collapsed  ${String(closed.length).padStart(5)} chars`)
 console.log(`  publisher open       ${String(opened.length).padStart(5)} chars`);
 if(closed.length===opened.length){console.log("    open and collapsed are identical — defaultOpen not honoured");bad++;}
 if(!/Publish a new program version/.test(closed)){console.log("    collapsed label missing");bad++;}
-for(const needle of ["Effective from","Program definition","does not change","Check"]){
+for(const needle of ["Effective from","Program definition","their app runs this version","Check"]){
   if(!opened.includes(needle)){console.log("    open form missing: "+needle);bad++;}
 }
 if(/Publish<\/button>/.test(opened)){console.log("    Publish button rendered before any check passed");bad++;}

@@ -444,9 +444,9 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
 
       <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
         This adds a new row; the version in force is never overwritten.{" "}
-        <strong style={{ color: T.textSecondary }}>It does not change {person.name}'s app</strong> — the client apps
-        build their program in from their own repo and do not read this table. What it changes today is how the days
-        above are scored from the effective date onward.
+        <strong style={{ color: T.textSecondary }}>It changes {person.name}'s app</strong> — from the effective date
+        their app runs this version (Today offers them the reload; it never swaps a session mid-workout), and the days
+        above are scored against it from that date onward.
       </p>
 
       <label style={{ color: T.textSecondary }} className="text-[11px] block mt-3 mb-1">
