@@ -12,14 +12,14 @@
 // version per client per day at the database level; everything this module
 // does is to give a readable answer before that index produces a raw 23505.
 //
-// What publishing does NOT do, and the UI says so plainly: it does not change
-// what the client's app runs. The three client apps import their program from
-// their own `src/core/program-*.js` at build time and never read the
-// `programs` table. Publishing changes how the coach dashboard scores the
-// days, and it is where in-app program delivery will eventually read from.
-// Treating it as "the client now has a new plan" would be wrong today.
+// Since Step 8, publishing DOES change what the client's app runs: each
+// client fetches its programme versions from this table, validates them with
+// program-schema.js, and runs the version in force on each date. Their
+// compiled `src/core/program-*.js` is only the fallback when a fetched
+// definition fails validation — which is why preflight runs that same check.
 
 import { validateProgramEdit, collectLoggedIds } from "./validate-program.js";
+import { validate as validateSchema } from "./program-schema.js";
 
 // Deliberately no Supabase import. Everything here is a pure decision about a
 // pasted string, so verify-publish.mjs runs with no node_modules installed,
@@ -197,6 +197,16 @@ export function preflight({ person, text, effectiveFrom, existingRows, logRows, 
 
   const structure = checkStructure(parsed.definition);
   structure.problems.forEach((p) => blocking.push(p));
+
+  // The client apps run this same validate() on every definition they fetch,
+  // and fall back to their compiled programme on any error. Running it here
+  // is what makes it one contract: a definition Coach accepts is one the
+  // client will run. (Step 8 learned this the hard way — Ville's programView
+  // was rejected on the client with 15 errors Coach never saw.)
+  // program-schema.js is a byte-identical copy of the client repos' file.
+  const schema = validateSchema(parsed.definition);
+  schema.errors.forEach((e) => blocking.push(`The client app would reject this: ${e}`));
+  schema.warnings.forEach((w) => warnings.push(w));
 
   // --- the date ------------------------------------------------------------
   if (!ISO_DATE.test(String(effectiveFrom || ""))) {

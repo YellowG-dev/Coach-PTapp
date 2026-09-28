@@ -9,6 +9,7 @@
 import fs from "fs";
 import assert from "assert";
 import { parseProgram, checkStructure, nextProgramRowId, preflight } from "./src/core/publish.js";
+import { validate as validateSchema } from "./src/core/program-schema.js";
 
 let checks = 0;
 let failures = 0;
@@ -39,10 +40,16 @@ const JUHA = byId["juha-2026-09"].definition;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const TODAY = new Date(2026, 8, 20); // 20 Sep 2026, so results do not drift
 
+// The fixture is the live table (refreshed 28 Sep 2026), so it holds versions
+// that start after TODAY. The scenarios below are "as of 20 Sep", so they see
+// only the rows in force by then — otherwise Juha's 23 Sep version would be
+// the one "in force" on a date the tests freeze before it existed.
+const rowsAsOfToday = programRows.filter((r) => String(r.effective_from) <= "2026-09-20");
+
 const base = {
   person: { id: ID.juha, name: "Juha" },
   effectiveFrom: "2026-11-01",
-  existingRows: programRows,
+  existingRows: rowsAsOfToday,
   logRows: juhaLogs,
   ownerId: ID.juha,
   today: TODAY,
@@ -82,7 +89,7 @@ check("a bare definition is taken as-is", () => {
 /* ------------------------------- Structure -------------------------------- */
 
 console.log("\nStructure");
-check("all three live programs pass the structural check", () => {
+check("every live program passes the structural check", () => {
   for (const r of programRows) {
     const s = checkStructure(r.definition);
     assert.ok(s.ok, `${r.id}: ${s.problems.join("; ")}`);
@@ -258,6 +265,53 @@ check("publishing for Henna uses Henna's history, not Juha's", () => {
 check("the version in force is reported so the coach can see what is being replaced", () => {
   const r = preflight({ ...base, text: JSON.stringify(JUHA) });
   assert.strictEqual(r.inForce.id, "juha-2026-09");
+});
+
+/* --------------------- The client's contract (Step 9) --------------------- */
+
+console.log("\nThe client's validator, run before publishing");
+check("every live programme passes the client's validate() with no errors", () => {
+  for (const r of programRows) {
+    const v = validateSchema(r.definition);
+    assert.ok(v.ok, `${r.id}: ${v.errors.join("; ")}`);
+  }
+});
+check("a definition the client would reject is BLOCKED, with the client's reason", () => {
+  const d = clone(JUHA);
+  delete d.slotMeta;
+  const r = preflight({ ...base, text: JSON.stringify(d) });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.row, null);
+  assert.ok(r.blocking.some((b) => /client app would reject this/.test(b) && /slotMeta/.test(b)), r.blocking.join(" | "));
+});
+check("a bad cardio target (unknown zone) is BLOCKED", () => {
+  const d = clone(byId["ville-2026-09"].definition);
+  d.hrZones = [{ id: "PK1", label: "PK1", pctMin: 60, pctMax: 70 }];
+  const first = Object.keys(d.blocks.run)[0];
+  d.blocks.run[first].cardio = { durationMin: 45, zoneAvg: "PK9" };
+  const r = preflight({
+    ...base,
+    person: { id: "2a545525-d9a4-450c-b90b-ce04d8f48abe", name: "Ville" },
+    existingRows: programRows,
+    logRows: [],
+    effectiveFrom: "2026-11-16",
+    text: JSON.stringify(d),
+  });
+  assert.strictEqual(r.ok, false);
+  assert.ok(r.blocking.some((b) => /PK9/.test(b)), r.blocking.join(" | "));
+});
+check("republishing the CURRENT live Juha version at a future date passes", () => {
+  const cur = byId["juha-2026-09-23"].definition;
+  const r = preflight({ ...base, existingRows: programRows, today: new Date(2026, 8, 28), text: JSON.stringify(cur) });
+  assert.ok(r.ok, "blocked: " + r.blocking.join(" | "));
+  assert.strictEqual(r.inForce.id, "juha-2026-09-23");
+});
+check("the client's warnings are shown but do not block", () => {
+  const d = clone(JUHA);
+  d.someFutureKey = true; // unknown keys warn on the client, they do not fail
+  const r = preflight({ ...base, text: JSON.stringify(d) });
+  assert.ok(r.ok, "blocked: " + r.blocking.join(" | "));
+  assert.ok(r.warnings.some((w) => /someFutureKey/.test(w)), r.warnings.join(" | "));
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed.`);
