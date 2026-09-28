@@ -14,8 +14,10 @@ its brief, does exactly that, and stops.
 3. Do the work in **Scope**. Nothing in **Out of scope**, and no file that is
    not listed, unless the brief says so.
 4. Run every command under **Gates**. Each must end `0 failed`.
-5. Branch name is given in the brief. Commit per repo, push, open one PR per
-   repo. Do **not** merge — John merges and deploys.
+5. Push to the branch **the session is configured to use** (usually
+   `claude/…`). A branch name in a brief is only a label; the session's
+   branch wins, and there is no need to flag the difference. Commit per repo,
+   push, open one PR per repo. Do **not** merge — John merges and deploys.
 6. Write the report (below) and push it with the Coach PR.
 
 ## Stop rules (every brief)

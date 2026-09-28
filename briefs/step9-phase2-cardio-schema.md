@@ -1,7 +1,7 @@
 # Step 9 · Phase 2 — repeatable cardio: data shape, no UI
 
 Status: **READY** — all decisions closed 28 Sep 2026. Touches different files from Phase 0 (no `app.jsx`, no `package.json`), so it may run in parallel with it.
-Branch: `step9/phase2-cardio-schema`.
+Branch: the session's own (see README).
 
 ## Why this comes before the editor
 
