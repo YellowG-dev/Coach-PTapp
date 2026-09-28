@@ -1,7 +1,7 @@
 # Step 9 · Phase 2 — repeatable cardio: data shape, no UI
 
-Status: **DRAFT — do not run.** Two decisions are open (§ Open decisions).
-Written 28 Sep 2026. Branch when released: `step9/phase2-cardio-schema`.
+Status: **READY** — all decisions closed 28 Sep 2026. Touches different files from Phase 0 (no `app.jsx`, no `package.json`), so it may run in parallel with it.
+Branch: the session's own (see README).
 
 ## Why this comes before the editor
 
@@ -38,8 +38,14 @@ this phase fixes the data shape, the validator and the pure logic, and ships
    over Oura.
 8. **Pace is never stored for results**; it is derived from duration and
    distance. Pace exists only as a *target*.
-9. **Weekly cardio total** in minutes, of confirmed entries. (Scope: see open
-   decision A.)
+9. **Weekly cardio total** in minutes, of confirmed entries: **planned cardio
+   sessions (their logged duration) plus extras**, counted once each.
+10. **One zone table per client**, as percentages of max HR, resolved with the
+    max HR the client sets in Settings. Each client has one programme, so the
+    table lives in that client's programme definition (`hrZones`); every
+    version of that client's programme carries it. **Exception:** Ville's bike
+    keeps fixed-bpm prescription text (his bike max is 173 vs 180 running) and
+    gets no zone target in v1.
 
 ## Facts this design rests on (verified 28 Sep 2026)
 
@@ -69,7 +75,7 @@ this phase fixes the data shape, the validator and the pure logic, and ships
 ### 1. Definition additions — `program-schema.js` (all optional, additive)
 
 ```js
-hrZones: [                       // programme-level; see open decision B
+hrZones: [                       // the client's one zone table, % of max HR
   { id: "PK1", label: "PK1", pctMin: 60, pctMax: 70 },
   { id: "PK2", label: "PK2", pctMin: 70, pctMax: 80 },
   { id: "VK",  label: "VK",  pctMin: 80, pctMax: 90 },
@@ -87,6 +93,7 @@ blocks.run.easy.cardio = {
   zoneAvg: "PK1", zoneMax: "PK2",
   pace: "5:45",                  // min:ss per km, target only
   note: "Flat route",
+  durationTaskId: "run-dur",     // which task in this block logs its minutes
 }
 ```
 
@@ -98,7 +105,9 @@ Validator rules — **errors** (client must not run it):
 - `cardioTypes`: array; ids unique; `label` non-empty; `sports` array of
   strings; `slot`, if present, is in `slots`; id `other` is reserved.
 - `block.cardio`: an object; numbers positive where present; `pace` matches
-  `^\d{1,2}:[0-5]\d$`; `zoneAvg`/`zoneMax` must be ids in `hrZones`.
+  `^\d{1,2}:[0-5]\d$`; `zoneAvg`/`zoneMax` must be ids in `hrZones`;
+  `durationTaskId`, if present, is the id of a task in that block's
+  `exercises`.
 
 **Warnings**: a sport listed under two cardio types; `cardio` on a block whose
 slot is `strength`.
@@ -140,8 +149,15 @@ No React, no Supabase, no `Date.now()` without an injectable clock.
   and already-confirmed workouts. Sport → slot via `cardioTypes[].slot`.
 - `zoneBpm(zoneId, hrMax, program)` → `{ lo, hi }` or `null` (no max HR, no
   zone table, unknown id).
-- `weeklyCardioMinutes(weekStart, overrides, …)` → confirmed minutes (scope
-  per decision A).
+- `weeklyCardioMinutes(weekStart, log, overrides, programOrResolver)` →
+  minutes of (a) planned cardio sessions logged that week — the logged
+  duration of a block in a non-strength slot, read from the block's duration
+  task (e.g. `run-dur`, stored as minutes) — plus (b) confirmed extras. A
+  planned session with no logged duration counts 0; never estimate. Which task
+  holds a block's duration must come from the definition, not from an ID
+  pattern: add optional `durationTaskId` to `block.cardio` and use it; if a
+  block has none, it counts 0 and the test says so. Score each day against the
+  programme in force on that day (resolver), as the rest of the engine does.
 - `pace(durationMin, distanceKm)` → `"m:ss"` or `null`.
 
 Also export `activityFromWorkout(workout, program)` → the log entry written on
@@ -179,13 +195,15 @@ All existing gates must still end `0 failed`. Byte-identical across the four
 client repos **and Coach**: `program-schema.js`. Across the four client repos:
 `cardio.js`, `test-cardio.mjs`.
 
-## Open decisions (John) — this brief is not runnable until both are closed
+Also in `test-cardio.mjs`: weekly total = planned logged duration + confirmed
+extras across a week that crosses a programme-version boundary; a planned
+block without `durationTaskId` counts 0.
 
-**A. What goes into the weekly cardio total?**
-Extras only, or planned cardio sessions (their logged duration) plus extras?
+## Decisions log
 
-**B. Zone table.**
-Proposal: one table per programme, defaulting to the Finnish split already in
-use (PK1 60–70, PK2 70–80, VK 80–90 % of max HR). Ville's bike zones use a
-different max (173 vs 180 running); v1 would keep bike targets as fixed-bpm
-text, as today, with no zone target. Confirm, or say otherwise.
+- A (28 Sep): weekly total = planned cardio + extras.
+- B (28 Sep): one zone table per client, % of Settings max HR; Ville's bike
+  is the exception (fixed bpm text, no zone target in v1).
+
+Writing `hrZones` into the live programmes is **data**, done from chat after
+this code is deployed to all four clients — not in this session.
