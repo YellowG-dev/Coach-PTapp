@@ -1,10 +1,12 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import { insertProgramVersion } from "./core/data.js";
 import { preflight } from "./core/publish.js";
 import {
   startDraft, setBlockField, setExerciseField, listEditable,
   catalogue, takenExerciseIds, addExistingExercise, addNewExercise, removeExercise, moveExercise,
   addBlock, retireBlock, restoreBlock, setBlockCardio, setHrZones, standardHrZones, setCardioTypes, slugify,
+  setScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions, DOW_ORDER, DOW_NAMES,
+  saveDraft, loadDraft, clearDraft, draftStatus,
 } from "./core/editor.js";
 import { collectLoggedIds } from "./core/validate-program.js";
 import { CheckResult } from "./check-result.jsx";
@@ -22,7 +24,7 @@ const EX_TEXT = [
 ];
 const EX_NUM = [["sets", "Sets"], ["pctMin", "% min"], ["pctMax", "% max"]];
 
-function Field({ label, value, onChange, disabled, mono, narrow, invalid }) {
+function Field({ label, value, onChange, disabled, mono, narrow, full, invalid }) {
   // Local buffer: a required field may be empty for a moment while retyping,
   // which the edit model (correctly) refuses. The draft keeps its last valid
   // value; the parent blocks Check until the field is filled in again.
@@ -30,7 +32,7 @@ function Field({ label, value, onChange, disabled, mono, narrow, invalid }) {
   const [seen, setSeen] = useState(value);
   if (value !== seen) { setSeen(value); setText(value); }
   return (
-    <label className={"block " + (narrow ? "w-20" : "flex-1 min-w-[8rem]")}>
+    <label className={"block " + (narrow ? "w-20" : full ? "w-full" : "flex-1 min-w-[8rem]")}>
       <span style={{ color: T.textMuted }} className="text-[10px] block mb-0.5">{label}</span>
       <input
         type="text"
@@ -140,15 +142,96 @@ function AddExercise({ cat, inBlock, onExisting, onNew }) {
   );
 }
 
-function AddLabelled({ button, fieldLabel, onAdd }) {
+function AddLabelled({ button, fieldLabel, shortLabel, onAdd }) {
   const [open, setOpen] = useState(false);
   const [label, setLabel] = useState("");
+  const [short, setShort] = useState("");
   if (!open) return <div className="mt-2"><Btn onClick={() => setOpen(true)}>{button}</Btn></div>;
+  const close = () => { setOpen(false); setLabel(""); setShort(""); };
   return (
     <div className="flex flex-wrap items-end gap-2 mt-2">
       <Field label={fieldLabel} value={label} onChange={setLabel} />
-      <Btn disabled={!label.trim() || !slugify(label)} onClick={() => { onAdd(label); setOpen(false); setLabel(""); }}>Add</Btn>
-      <Btn onClick={() => { setOpen(false); setLabel(""); }}>Cancel</Btn>
+      {shortLabel && <Field label={shortLabel} value={short} onChange={setShort} />}
+      <Btn disabled={!label.trim() || !slugify(label)} onClick={() => { onAdd(label, short); close(); }}>Add</Btn>
+      <Btn onClick={close}>Cancel</Btn>
+    </div>
+  );
+}
+
+const getStorage = () => { try { return typeof localStorage === "undefined" ? null : localStorage; } catch (e) { return null; } };
+
+/** Weekly schedule: Week A / Week B tabs and a Monday-first grid, one dropdown per slot per day. */
+function ScheduleEditor({ draft, when, apply }) {
+  const [week, setWeek] = useState("A");
+  const slots = draft.slots || [];
+  let auto = null;
+  try { auto = weekFor(when); } catch (e) { /* date field is mid-edit */ }
+  const other = week === "A" ? "B" : "A";
+  const cellOptions = (slot, current) => {
+    const opts = (draft.slotOptions && draft.slotOptions[slot]) || [];
+    const live = opts.filter((o) => typeof o.value === "string").map((o) => [o.value, o.label]);
+    const list = [["", "—"], ...live];
+    if (current && !live.some(([k]) => k === current)) {
+      const blk = draft.blocks && draft.blocks[slot] && draft.blocks[slot][current];
+      list.push([current, `${(blk && blk.label) || current} (retired)`]);
+    }
+    return list;
+  };
+  return (
+    <div style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2 mt-4">
+      <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">Weekly schedule</p>
+      <div className="flex flex-wrap items-center gap-2 mt-1">
+        {["A", "B"].map((w) => (
+          <button
+            type="button"
+            key={w}
+            onClick={() => setWeek(w)}
+            style={{ borderColor: week === w ? T.textSecondary : T.border, color: week === w ? T.textPrimary : T.textMuted }}
+            className={BTN}
+          >
+            Week {w}
+          </button>
+        ))}
+        <Btn onClick={() => apply((d) => copyWeek(d, "A", "B"))}>Copy A → B</Btn>
+        <Btn onClick={() => apply((d) => copyWeek(d, "B", "A"))}>Copy B → A</Btn>
+      </div>
+      <p style={{ color: T.textMuted }} className="text-[11px] mt-1">
+        {auto ? `Week of ${when} is Week ${auto}.` : "Pick a valid effective date to see which week it falls in."} The client's own
+        moved or cleared sessions still apply on top of this default week.
+      </p>
+      <div className="overflow-x-auto mt-2">
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(7.5rem, 1fr))", minWidth: "54rem" }}>
+          {DOW_ORDER.map((dow) => {
+            const day = (draft.schedule && draft.schedule[week] && draft.schedule[week][dow]) || {};
+            return (
+              <div key={dow} data-dow={dow}>
+                <p style={{ color: T.textPrimary }} className="text-[11px] font-semibold">{DOW_NAMES[dow]}</p>
+                {slots.map((slot) => {
+                  const cur = day[slot] || "";
+                  const retired = cur && !((draft.slotOptions && draft.slotOptions[slot]) || []).some((o) => o.value === cur);
+                  return (
+                    <label key={slot} className="block mt-1" style={{ opacity: retired ? 0.5 : 1 }}>
+                      <span style={{ color: T.textMuted }} className="text-[10px] block">{slot}</span>
+                      <select
+                        value={cur}
+                        onChange={(e) => apply((d) => setScheduleCell(d, week, dow, slot, e.target.value || null))}
+                        style={{ color: T.textPrimary, background: T.bg, borderColor: T.border }}
+                        className="w-full text-xs px-1 py-1 rounded-md border focus:outline-none focus-visible:ring-2"
+                      >
+                        {cellOptions(slot, cur).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                      </select>
+                    </label>
+                  );
+                })}
+                <div className="mt-1">
+                  <Field label="Note" full value={day.note || ""} onChange={(v) => apply((d) => setDayNote(d, week, dow, v))} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <p style={{ color: T.textMuted }} className="text-[10px] mt-1">Editing Week {week}; the other week is Week {other}.</p>
     </div>
   );
 }
@@ -180,8 +263,25 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
   const cat = useMemo(() => (open ? catalogue(programs, person.id) : []), [open, programs, person.id]);
   const takenIds = () => takenExerciseIds(programs, person.id, collectLoggedIds((logRows || []).map((r) => r && r.payload)));
 
+  // A draft saved by an earlier visit (localStorage; Coach has its own origin).
+  const [storageTick, setStorageTick] = useState(0);
+  const [promptDone, setPromptDone] = useState(false);
+  const savedNow = useMemo(() => (open ? loadDraft(getStorage(), person.id) : null), [open, person.id, storageTick]);
+  const baseDef = current && draft ? ((programs || []).find((r) => r.id === current.baseId) || {}).definition : null;
+  const changes = useMemo(() => (draft && baseDef ? diffDefinitions(baseDef, draft) : []), [draft, baseDef]);
+  const promptSaved = open && !session && savedNow && current && draft && !promptDone;
+
+  useEffect(() => {
+    if (!session || !session.draft) return;
+    const base = ((programs || []).find((r) => r.id === session.baseId) || {}).definition;
+    if (!base) return;
+    if (diffDefinitions(base, session.draft).length) saveDraft(getStorage(), person.id, session.baseId, session.draft);
+    else clearDraft(getStorage(), person.id);
+  }, [session]);
+
   const begin = () => {
-    setSession(startDraft(programs, person.id, tomorrow()));
+    setSession(null);
+    setPromptDone(false);
     setWhen(tomorrow());
     setResult(null);
     setPublished(null);
@@ -227,6 +327,8 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
     setBusy(false);
     setPublished(r);
     if (r.ok) {
+      clearDraft(getStorage(), person.id);
+      setStorageTick((n) => n + 1);
       setResult(null);
       setSession(null);
       if (onPublished) onPublished();
@@ -265,11 +367,39 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
       ) : (
         <>
           <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
-            Based on: {current.baseName} (in force from {String(current.baseFrom)}). Edits blocks, exercises, cardio
-            targets and heart-rate zones; schedule, testing and daily sections carry over unchanged. Exercise IDs
+            Based on: {current.baseName} (in force from {String(current.baseFrom)}). Edits the weekly schedule, blocks, exercises, cardio
+            targets and heart-rate zones; testing and daily sections carry over unchanged. Exercise IDs
             cannot be changed, and history is kept when an exercise is removed or a block retired.{" "}
             <strong style={{ color: T.textSecondary }}>Publishing changes {person.name}'s app.</strong>
           </p>
+
+          {promptSaved ? (
+            <div style={{ borderColor: T.warn }} className="rounded-lg border px-3 py-2 mt-3">
+              {draftStatus(savedNow, current.baseId) === "resume" ? (
+                <>
+                  <p style={{ color: T.textPrimary }} className="text-[11px]">
+                    A saved draft from {String(savedNow.savedAt).slice(0, 16).replace("T", " ")} is available for this version.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Btn onClick={() => { setSession({ ...current, draft: savedNow.draft }); setPromptDone(true); }}>Resume draft</Btn>
+                    <Btn warn onClick={() => { clearDraft(getStorage(), person.id); setStorageTick((n) => n + 1); setPromptDone(true); }}>Discard</Btn>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p style={{ color: T.warn }} className="text-[11px]">
+                    A saved draft exists, but it was made on a version that is no longer in force (someone published
+                    meanwhile), so it cannot be resumed.
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Btn warn onClick={() => { clearDraft(getStorage(), person.id); setStorageTick((n) => n + 1); setPromptDone(true); }}>Discard</Btn>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <>
+              <ScheduleEditor draft={draft} when={when} apply={apply} />
 
           {tree.map(({ slot, blocks }) => (
             <div key={slot} className="mt-4">
@@ -326,6 +456,14 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
                         <Field label="Label" value={b.label} invalid={Boolean(blanks[slot + "/" + b.key])} onChange={(v) => applyRequired(slot + "/" + b.key, v, (d) => setBlockField(d, slot, b.key, "label", v))} />
                         <Field label="Subtitle" value={b.subtitle} onChange={(v) => apply((d) => setBlockField(d, slot, b.key, "subtitle", v))} />
                         <Field label="Gentler note" value={b.gentlerNote} onChange={(v) => apply((d) => setBlockField(d, slot, b.key, "gentlerNote", v))} />
+                      </div>
+                      <div className="mt-1">
+                        <Field
+                          label="Short label in the client's picker"
+                          value={b.optionLabel}
+                          invalid={Boolean(blanks["opt:" + bk])}
+                          onChange={(v) => applyRequired("opt:" + bk, v, (d) => setOptionLabel(d, slot, b.key, v))}
+                        />
                       </div>
                       <label style={{ color: T.textSecondary }} className="text-[11px] flex items-center gap-1.5 mt-1">
                         <input
@@ -419,7 +557,7 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
                 </div>
                 );
               })}
-              <AddLabelled button="Add block" fieldLabel="New block label" onAdd={(label) => apply((d) => addBlock(d, slot, label))} />
+              <AddLabelled button="Add block" fieldLabel="New block label" shortLabel="Short picker label (optional)" onAdd={(label, short) => apply((d) => addBlock(d, slot, label, short))} />
             </div>
           ))}
 
@@ -488,11 +626,22 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
             className="text-xs px-2 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
           />
 
+          <div style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2 mt-4">
+            <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">Changes</p>
+            {changes.length === 0 ? (
+              <p style={{ color: T.textMuted }} className="text-[11px] mt-1">No changes</p>
+            ) : (
+              <ul style={{ color: T.textPrimary }} className="text-[11px] mt-1 leading-relaxed list-disc pl-4">
+                {changes.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            )}
+          </div>
+
           <div className="flex gap-2 mt-2">
             <button
               onClick={runCheck}
-              disabled={hasBlank}
-              style={{ borderColor: T.border, color: hasBlank ? T.textMuted : T.textPrimary }}
+              disabled={hasBlank || changes.length === 0}
+              style={{ borderColor: T.border, color: hasBlank || changes.length === 0 ? T.textMuted : T.textPrimary }}
               className="text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
             >
               Check
@@ -525,6 +674,8 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
                 ? `Published ${published.row.id}, effective ${published.row.effective_from}. The days above have been re-scored.`
                 : "✕ " + published.error}
             </p>
+          )}
+            </>
           )}
         </>
       )}

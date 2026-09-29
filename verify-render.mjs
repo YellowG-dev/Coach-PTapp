@@ -76,6 +76,16 @@ for(const p of edRoster){
   if(c.length===o.length){console.log("    editor open == collapsed");bad++;}
   if(!c.includes("Edit programme for "+p.name)){console.log("    editor collapsed label missing");bad++;}
   for(const needle of ["Based on:","Effective from","Check","Add existing","Add new","Add block","Retire","Remove","Heart-rate zones","Use standard PK1/PK2/VK","Cardio types","Add cardio type"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  for(const needle of ["Weekly schedule","Week A","Week B","Copy A → B","Copy B → A","Short label in the client&#x27;s picker","Changes","No changes"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  {
+    // Monday first: the seven day headers appear as Mon..Sat, Sun
+    const grid=o.slice(o.indexOf("Weekly schedule"));
+    const order=[...grid.matchAll(/data-dow="(\d)"/g)].map(m=>m[1]).slice(0,7).join("");
+    if(order!=="1234560"){console.log("    schedule grid order is "+order+", expected 1234560");bad++;}
+    const first=grid.indexOf(">Mon<"), last=grid.indexOf(">Sun<");
+    if(first<0||last<0||first>last){console.log("    schedule grid not Monday first");bad++;}
+  }
+  if(!/<button[^>]*disabled=""[^>]*>Check<\/button>/.test(o)){console.log("    Check not disabled with no changes");bad++;}
   if(p.id!==ID.joonatan && !o.includes("Cardio target")){console.log("    editor open missing: Cardio target");bad++;}
   if(p.id!==ID.joonatan && !o.includes("Zones need a heart-rate zone table")){console.log("    editor open missing: no-zones hint");bad++;}
   if(/Publish<\/button>/.test(o)){console.log("    editor Publish button before any check");bad++;}

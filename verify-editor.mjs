@@ -8,9 +8,12 @@ import {
   startDraft, setBlockField, setExerciseField, listEditable,
   catalogue, takenExerciseIds, addExistingExercise, addNewExercise, removeExercise, moveExercise,
   addBlock, retireBlock, restoreBlock, setBlockCardio, setHrZones, standardHrZones, setCardioTypes,
+  setScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions,
+  saveDraft, loadDraft, clearDraft, draftStatus,
 } from "./src/core/editor.js";
 import { collectLoggedIds } from "./src/core/validate-program.js";
 import { preflight } from "./src/core/publish.js";
+import { resolveSchedule } from "./src/core/engine.js";
 
 let checks = 0, failures = 0;
 function check(label, fn) {
@@ -375,6 +378,165 @@ check("retiring a block and removing an exercise pass preflight (history kept)",
   const d = removeExercise(retireBlock(juha, "strength", "a"), "strength", "upper", "up-5");
   const r = pf(ID.juha, "Juha", d);
   assert.deepStrictEqual(r.blocking, []);
+});
+
+/* ------------------------------- Phase 3c ---------------------------------- */
+
+check("every 3c function leaves its input unchanged and returns a new object", () => {
+  const snap = clone(ville);
+  const outs = [
+    setScheduleCell(ville, "A", "6", "run", null),
+    setDayNote(ville, "A", "1", "hello"),
+    copyWeek(ville, "A", "B"),
+    setOptionLabel(ville, "strength", "a", "A (legs)"),
+    addBlock(ville, "strength", "New", "N"),
+    restoreBlock(retireBlock(ville, "strength", "nogym"), "strength", "nogym", "NG"),
+  ];
+  outs.forEach((o) => assert.notStrictEqual(o, ville));
+  diffDefinitions(ville, outs[0]);
+  assert.deepStrictEqual(ville, snap);
+});
+
+check("setScheduleCell: rejects retired block, unknown slot, bad dow/week; writes null explicitly", () => {
+  const retired = retireBlock(ville, "run", "long");
+  assert.throws(() => setScheduleCell(retired, "A", "0", "run", "long"));
+  assert.throws(() => setScheduleCell(ville, "A", "0", "run", "nope"));
+  assert.throws(() => setScheduleCell(ville, "A", "0", "swim", "easy"));
+  assert.throws(() => setScheduleCell(ville, "A", "7", "run", "easy"));
+  assert.throws(() => setScheduleCell(ville, "A", "x", "run", "easy"));
+  assert.throws(() => setScheduleCell(ville, "C", "0", "run", "easy"));
+  const cleared = setScheduleCell(ville, "A", "6", "run", null);
+  assert.ok(Object.prototype.hasOwnProperty.call(cleared.schedule.A["6"], "run"));
+  assert.strictEqual(cleared.schedule.A["6"].run, null);
+  const set = setScheduleCell(ville, "B", "0", "run", "long");
+  assert.strictEqual(set.schedule.B["0"].run, "long");
+  assert.deepStrictEqual(set.schedule.A, ville.schedule.A);
+  assert.strictEqual(set.schedule.B["0"].note, ville.schedule.B["0"].note); // note untouched
+  // a retired block already in a cell can still be cleared
+  const stale = retireBlock(ville, "run", "long");
+  assert.strictEqual(setScheduleCell(stale, "A", "6", "run", null).schedule.A["6"].run, null);
+});
+
+check("setDayNote sets and removes", () => {
+  const d = setDayNote(ville, "A", "1", "Rest well");
+  assert.strictEqual(d.schedule.A["1"].note, "Rest well");
+  assert.ok(!("note" in setDayNote(d, "A", "1", "").schedule.A["1"]));
+  assert.ok(!("note" in setDayNote(ville, "A", "0", "  ").schedule.A["0"]));
+  assert.throws(() => setDayNote(ville, "A", "9", "x"));
+});
+
+check("copyWeek makes B deep-equal A; later edits to A do not change B", () => {
+  const edited = setScheduleCell(ville, "A", "1", "run", "easy");
+  const c = copyWeek(edited, "A", "B");
+  assert.deepStrictEqual(c.schedule.B, c.schedule.A);
+  const later = setDayNote(c, "A", "2", "changed");
+  assert.notDeepStrictEqual(later.schedule.B, later.schedule.A);
+  assert.strictEqual(c.schedule.B["1"].run, "easy");
+  assert.notStrictEqual(c.schedule.B, c.schedule.A);
+  assert.throws(() => copyWeek(ville, "A", "A"));
+});
+
+check("weekFor agrees with the engine's resolveSchedule(...).weekType for 60 consecutive days", () => {
+  const start = new Date(2026, 8, 20);
+  for (let i = 0; i < 60; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    const ds = [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-");
+    assert.strictEqual(weekFor(ds), resolveSchedule(d, "auto", {}, ville).weekType, ds);
+  }
+  assert.throws(() => weekFor("garbage"));
+});
+
+check("setOptionLabel changes only that option; retired / empty throws", () => {
+  const out = setOptionLabel(ville, "strength", "a", "A (legs)");
+  const opt = (d) => d.slotOptions.strength.map((o) => o.label);
+  assert.strictEqual(out.slotOptions.strength.find((o) => o.value === "a").label, "A (legs)");
+  assert.deepStrictEqual(out.blocks, ville.blocks);
+  assert.deepStrictEqual(out.slotOptions.run, ville.slotOptions.run);
+  assert.strictEqual(opt(out).filter((l, i) => l !== opt(ville)[i]).length, 1);
+  assert.throws(() => setOptionLabel(ville, "strength", "a", " "));
+  assert.throws(() => setOptionLabel(retireBlock(ville, "strength", "nogym"), "strength", "nogym", "x"));
+  assert.throws(() => setOptionLabel(ville, "strength", "zzz", "x"));
+});
+
+check("addBlock / restoreBlock take an optional short label (default = block label)", () => {
+  assert.deepStrictEqual(addBlock(ville, "strength", "Long name", "Short").slotOptions.strength.at(-1), { label: "Short", value: "long-name" });
+  assert.strictEqual(addBlock(ville, "strength", "Long name").slotOptions.strength.at(-1).label, "Long name");
+  const r = retireBlock(ville, "strength", "nogym");
+  assert.strictEqual(restoreBlock(r, "strength", "nogym").slotOptions.strength.at(-1).label, ville.blocks.strength.nogym.label);
+  assert.strictEqual(restoreBlock(r, "strength", "nogym", "NG").slotOptions.strength.at(-1).label, "NG");
+});
+
+check("diffDefinitions(x, x) is empty for every fixture", () => {
+  for (const r of rows) assert.deepStrictEqual(diffDefinitions(r.definition, clone(r.definition)), [], r.id);
+});
+
+check("diffDefinitions: one change of each kind lists exactly those changes, in order", () => {
+  let d = ville;
+  d = setScheduleCell(d, "A", "2", "run", "long");                                   // schedule cell
+  d = setDayNote(d, "B", "0", "Rest");                                               // note
+  d = addBlock(d, "run", "Tempo run", "Tempo");                                      // block added
+  d = retireBlock(d, "strength", "nogym");                                           // retired
+  d = addExistingExercise(d, "strength", "c", catalogue(rows, ID.ville).find((e) => e.id === "bss")); // exercise added
+  d = removeExercise(d, "strength", "b", "dead-bug");                                // removed
+  d = moveExercise(d, "strength", "a", "rdl-bb", -1);                                // moved
+  d = setExerciseField(d, "strength", "a", "leg-press", "presc", "4×8");            // field changed
+  d = setBlockCardio(d, "run", "long", { durationMin: 120 });                        // cardio target
+  d = setHrZones(d, standardHrZones());                                              // zones
+  d = setCardioTypes(d, [{ id: "swim", label: "Swim", sports: [] }]);                // types
+  d = setOptionLabel(d, "strength", "a", "A (legs)");                                // picker label
+  const lines = diffDefinitions(ville, d);
+  const kinds = lines.map((l) => l.split(/[:·]/)[0].trim().replace(/ (A|B)$/, ""));
+  assert.deepStrictEqual(lines, [
+    "Schedule A · Tue: run easy → long",
+    "Schedule B · Sun: note changed",
+    "Block retired: strength/nogym",
+    'Block added: run/tempo-run "Tempo run"',
+    "Field changed in strength/a: " + ville.blocks.strength.a.exercises.find((e) => e.id === "leg-press").name + ' (leg-press) presc "' + ville.blocks.strength.a.exercises.find((e) => e.id === "leg-press").presc + '" → "4×8"',
+    "Exercise moved in strength/a: Bulgarian split squat (bss)", // rdl-bb up one = bss down one; one line, not two
+    "Exercise removed from strength/b: " + ville.blocks.strength.b.exercises.find((e) => e.id === "dead-bug").name + " (dead-bug)",
+    "Exercise added to strength/c: Bulgarian split squat (bss)",
+    "Cardio target run/long: duration — → 120 min",
+    "Zones changed",
+    "Cardio types changed",
+    'Picker label strength/a: "' + ville.slotOptions.strength.find((o) => o.value === "a").label + '" → "A (legs)"',
+  ], kinds.join(","));
+});
+
+check("a Ville draft moving run/long Saturday → Sunday in both weeks passes preflight; diff has exactly two schedule lines", () => {
+  let d = ville;
+  for (const w of ["A", "B"]) {
+    d = setScheduleCell(d, w, "6", "run", null);
+    d = setScheduleCell(d, w, "0", "run", "long");
+  }
+  const lines = diffDefinitions(ville, d);
+  assert.deepStrictEqual(lines, ["Schedule A · run long: Sat → Sun", "Schedule B · run long: Sat → Sun"]);
+  const r = pf(ID.ville, "Ville", d);
+  assert.deepStrictEqual(r.blocking, []);
+  assert.strictEqual(r.ok, true);
+});
+
+check("draft storage: save → load round-trips; stale baseId detected; broken storage never throws", () => {
+  const mem = {}; const store = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = v; }, removeItem: (k) => { delete mem[k]; } };
+  const d = setDayNote(ville, "A", "1", "x");
+  assert.strictEqual(loadDraft(store, ID.ville), null);
+  assert.strictEqual(saveDraft(store, ID.ville, "ville-2026-09", d, "2026-09-29T10:00:00Z"), true);
+  assert.ok("coachDraft_" + ID.ville in mem);
+  const got = loadDraft(store, ID.ville);
+  assert.deepStrictEqual(got, { baseId: "ville-2026-09", savedAt: "2026-09-29T10:00:00Z", draft: d });
+  assert.strictEqual(draftStatus(got, "ville-2026-09"), "resume");
+  assert.strictEqual(draftStatus(got, "ville-2026-11"), "stale");
+  assert.strictEqual(loadDraft(store, ID.juha), null);
+  assert.strictEqual(clearDraft(store, ID.ville), true);
+  assert.strictEqual(loadDraft(store, ID.ville), null);
+  mem["coachDraft_x"] = "{not json"; assert.strictEqual(loadDraft(store, "x"), null);
+  const boom = () => { throw new Error("denied"); };
+  const bad = { getItem: boom, setItem: boom, removeItem: boom };
+  assert.strictEqual(saveDraft(bad, ID.ville, "b", d), false);
+  assert.strictEqual(loadDraft(bad, ID.ville), null);
+  assert.strictEqual(clearDraft(bad, ID.ville), false);
+  assert.strictEqual(saveDraft(null, ID.ville, "b", d), false);
+  assert.strictEqual(loadDraft(undefined, ID.ville), null);
+  assert.ok(setDayNote(ville, "A", "1", "still works").schedule.A["1"].note);
 });
 
 console.log(`\n${checks - failures} passed, ${failures} failed`);
