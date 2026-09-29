@@ -394,6 +394,36 @@ export function setScheduleCell(def, week, dow, slot, blockKey) {
   return out;
 }
 
+/**
+ * Moves the block in `fromDow`'s `slot` to `toDow`; if `toDow` already holds a
+ * block in that slot the two swap. Same day → the definition unchanged (same
+ * object contents). Empty source → throws. Built on setScheduleCell, so its
+ * week/day/slot checks apply. A block that is already in the schedule may be
+ * moved even if it has since been retired — only placing a retired block from
+ * the library (setScheduleCell) is refused.
+ */
+export function moveScheduleCell(def, week, fromDow, toDow, slot) {
+  const from = String(fromDow), to = String(toDow);
+  const at = (d, dow) => (d && d.schedule && d.schedule[week] && d.schedule[week][dow] && d.schedule[week][dow][slot]) || null;
+  // Validation of week / days / slot, and the source read, go through the same checks.
+  setScheduleCell(def, week, from, slot, null);
+  setScheduleCell(def, week, to, slot, null);
+  const moving = at(def, from);
+  if (!moving) throw new Error(`Nothing to move: ${DOW_NAMES[from]} has no ${slot} block in Week ${week}`);
+  if (from === to) return clone(def);
+  const displaced = at(def, to);
+  const put = (d, dow, key) => {
+    if (key === null || liveKeys(d, slot).includes(key)) return setScheduleCell(d, week, dow, slot, key);
+    // already in the schedule but retired: relocate without re-validating liveness
+    const out = setScheduleCell(d, week, dow, slot, null);
+    out.schedule[week][String(dow)][slot] = key;
+    return out;
+  };
+  let out = put(def, from, displaced);
+  out = put(out, to, moving);
+  return out;
+}
+
 /** Sets the day's note; empty removes it. */
 export function setDayNote(def, week, dow, text) {
   if (!WEEKS.includes(week)) throw new Error(`Week must be A or B (got ${week})`);

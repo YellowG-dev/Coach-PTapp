@@ -225,16 +225,34 @@ function runMetric(ctx) {
 }
 
 function strMetric(ctx) {
-  if (!hasWearable(ctx)) return none(NO_WEARABLE);
-  const keys = last7Keys(ctx.today);
-  const done = windowWorkouts(ctx, keys[0], keys[6]).filter((w) => w.sport === "strengthTraining").length;
-  let planned = 0;
+  // Window: last 7 days incl. today, minus days with no version in force.
+  const days = [];
   for (let i = 0; i < 7; i++) {
     const d = addDays(ctx.today, i - 6);
-    const { info } = scheduleOn(ctx, d);
-    if (info && info.slots.strength) planned++;
+    if (versionFor(ctx, d)) days.push(d);
   }
-  return m(String(done), `of ${planned} planned`);
+  if (!days.length) return none("No programme in force");
+  const keys = days.map(dateKey);
+  const scored = {};
+  ((ctx.adherence && ctx.adherence.days) || []).forEach((d) => (scored[d.date] = d));
+  const watch = new Set(
+    windowWorkouts(ctx, keys[0], keys[keys.length - 1])
+      .filter((w) => w.sport === "strengthTraining")
+      .map((w) => w.day)
+  );
+  // A day counts once, whether the app log, the watch or both say so.
+  const done = keys.filter((k) => {
+    const s = scored[k];
+    const app = s && s.byCat && s.byCat.strength && s.byCat.strength.done > 0;
+    return app || watch.has(k);
+  }).length;
+  const planned = days.filter((d) => {
+    const { info } = scheduleOn(ctx, d);
+    return info && info.slots.strength;
+  }).length;
+  const shortened = days.length < 7;
+  const first = days[0];
+  return m(String(done), `of ${planned} planned` + (shortened ? ` · since ${first.getDate()}.${first.getMonth() + 1}.` : ""));
 }
 
 function sess30Metric(ctx) {
@@ -451,20 +469,35 @@ export function needsAttention(ctx) {
     out.push({ id: "zones", text: "Heart rate is used but the programme has no zone table" });
   }
 
-  const week = weekPlan(ctx);
   const real = realWorkouts(ctx);
-  for (const day of week) {
-    if (day.key > dateKey(ctx.today)) continue;
-    const date = new Date(day.key + "T00:00:00");
+  const ovByDay = indexByDay(ctx.overrideRows);
+  const todayKey = dateKey(ctx.today);
+  const monday = getWeekMonday(ctx.today);
+  for (let i = 0; i < 7; i++) {
+    const date = addDays(monday, i);
+    const key = dateKey(date);
+    if (key > todayKey) break;
     const { program, info } = scheduleOn(ctx, date);
-    const plannedNonStrength = program && info && (program.slots || []).some((s) => s !== "strength" && info.slots[s]);
-    if (plannedNonStrength) continue;
+    const ov = ovByDay[key] || {};
+    const hasActivity = !(info && info.skip) && Array.isArray(ov.activities) && ov.activities.length > 0;
+    const planned = (slot) => Boolean(program && info && info.slots[slot]);
+    const anyNonStrength = Boolean(program && (program.slots || []).some((sl) => sl !== "strength" && planned(sl)));
+    const matches = (w) => {
+      if (w.sport === "strengthTraining") return planned("strength");
+      const types = (program && Array.isArray(program.cardioTypes) ? program.cardioTypes : []).filter(
+        (t) => Array.isArray(t.sports) && t.sports.includes(w.sport)
+      );
+      if (types.length) return types.some((t) => t.slot && planned(t.slot));
+      // No mapping for this sport: unknown must not raise a false alarm.
+      return anyNonStrength || hasActivity;
+    };
     real
-      .filter((w) => w.day === day.key)
+      .filter((w) => w.day === key)
+      .filter((w) => !matches(w))
       .forEach((w) =>
         out.push({
-          id: "unplanned:" + day.key + ":" + w.started_at,
-          text: `Unplanned session · ${niceDay(day.key)} · ${sportLabel(w.sport)} ${Math.round(Number(w.duration_minutes) || 0)} min`,
+          id: "unplanned:" + key + ":" + w.started_at,
+          text: `Unplanned session · ${niceDay(key)} · ${sportLabel(w.sport)} ${Math.round(Number(w.duration_minutes) || 0)} min`,
         })
       );
   }

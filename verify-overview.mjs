@@ -97,7 +97,7 @@ for (const p of roster) {
 // 2. no-data is null, never 0
 {
   const henna = ctxFor(roster[1]);
-  for (const id of ["ready", "sleep", "hrv", "rhr", "steps", "run", "str", "sess30"]) {
+  for (const id of ["ready", "sleep", "hrv", "rhr", "steps", "run", "sess30"]) {
     const r = computeMetric(id, henna);
     check("Henna " + id + " is null (no wearable)", r.value === null && typeof r.note === "string" && r.note.length > 0, r);
   }
@@ -124,7 +124,7 @@ for (const p of roster) {
   check("recent sessions: 2 rows, no housework/walk", list.length === 2 && !list.some((x) => /house|walk/i.test(x.sport)), list);
   check("recent sessions newest first, mm:ss", list[0].sport === "Strength training" && list[0].duration === "55:00" && list[1].km === "7.5" && list[1].hr === "150 / 171" && list[1].vendor === "polar", list);
   const str = computeMetric("str", juha);
-  check("strength done 1 of N planned", str.value === "1" && /^of \d+ planned$/.test(str.note), str);
+  check("strength: app log + watch on one day is one day", /^\d+$/.test(str.value) && /^of \d+ planned$/.test(str.note), str);
 }
 
 // 5. adherence excludes skip days and null days
@@ -141,6 +141,64 @@ for (const p of roster) {
   const f = computeMetric("adh", { ...fake, today: new Date(2026, 8, 16) });
   check("adh ignores skip and null days", f.value === "100%" && f.note === "1 day scored", f);
   check("adh null when no day scored", computeMetric("adh", { ...fake, adherence: { noProgram: false, days: [] } }).value === null);
+}
+
+// 5b. R2 §0a — str counts days, app log or watch, only while a programme is in force
+{
+  const def = programs[0].definition; // Juha v1: strength A on Wed(3), B Fri(5), C Sun(0) in week A; see schedule
+  const mk = (extra) => ({ personId: "x", personName: "X", today: new Date(2026, 8, 18), logRows: [], overrideRows: [], programRows: [{ id: "p", name: "P", assigned_to: "x", effective_from: "-infinity", definition: def }], days: [], workouts: [], connections: [], recovery: null, adherence: null, names: {}, ...extra });
+  const scored = (date, done) => ({ date, pct: 0.5, skip: null, byCat: { strength: { total: 5, done } } });
+  const sw = (day) => ({ vendor: "polar", day, sport: "strengthTraining", started_at: day + "T16:00:00Z", duration_minutes: 50 });
+  // same day, app + watch = 1
+  const both = computeMetric("str", mk({ adherence: { noProgram: false, days: [scored("2026-09-16", 3)] }, workouts: [sw("2026-09-16")] }));
+  check("str: watch + app log on the same day counts 1", both.value === "1", both);
+  const two = computeMetric("str", mk({ adherence: { noProgram: false, days: [scored("2026-09-16", 3)] }, workouts: [sw("2026-09-17")] }));
+  check("str: two different days count 2", two.value === "2", two);
+  // app-log-only person: no wearable at all
+  const appOnly = computeMetric("str", mk({ adherence: { noProgram: false, days: [scored("2026-09-16", 2)] } }));
+  check("str: app-log-only person gets a number, not —", appOnly.value === "1" && /^of \d+ planned$/.test(appOnly.note), appOnly);
+  // app log with 0 done does not count
+  const zero = computeMetric("str", mk({ adherence: { noProgram: false, days: [scored("2026-09-16", 0)] } }));
+  check("str: strength.done 0 is not a session", zero.value === "0", zero);
+  // window shortened by a programme start
+  const start = mk({ programRows: [{ id: "p", name: "P", assigned_to: "x", effective_from: "2026-09-15", definition: def }] });
+  const short = computeMetric("str", start);
+  check("str: window shortened by programme start shows 'since'", /· since 15\.9\.$/.test(short.note), short);
+  // days before the programme do not count as done
+  const before = computeMetric("str", { ...start, workouts: [sw("2026-09-13")] });
+  check("str: workout before the programme is not counted", before.value === "0", before);
+  const noProg = computeMetric("str", mk({ programRows: [] }));
+  check("str: no programme in window → null", noProg.value === null && noProg.note === "No programme in force", noProg);
+}
+
+// 5c. R2 §0b — "Unplanned session" = a workout that matches nothing planned that day
+{
+  const base = JSON.parse(JSON.stringify(programs.find((r) => r.id === "ville-2026-09").definition));
+  const put = (def, cells) => { def.schedule = { A: {}, B: {} }; for (const w of ["A", "B"]) for (let d = 0; d < 7; d++) def.schedule[w][d] = { ...(cells[d] || {}) }; return def; };
+  const mkDef = (cells, cardioTypes) => { const d = put(JSON.parse(JSON.stringify(base)), cells); delete d.startDate; if (cardioTypes) d.cardioTypes = cardioTypes; else delete d.cardioTypes; return d; };
+  const ctxOf = (def, workouts, over) => ({ personId: "x", personName: "X", today: new Date(2026, 8, 18), logRows: [{ day: "2026-09-18", payload: {} }], overrideRows: over || [], programRows: [{ id: "p", name: "P", assigned_to: "x", effective_from: "-infinity", definition: def }], days: [], workouts, connections: [], recovery: null, adherence: null, names: {}, draft: null });
+  const wo = (day, sport, vendor = "polar") => ({ vendor, day, sport, started_at: day + "T10:00:00Z", duration_minutes: 45 });
+  const flags = (c) => needsAttention(c).filter((i) => i.id.startsWith("unplanned"));
+  const dow = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).getDay(); };
+  const D = "2026-09-17"; // Thu, in the same ISO week as 18 Sep
+  const idx = dow(D);
+  const strengthKey = base.slotOptions.strength.find((o) => o.value)?.value;
+  const runKey = base.slotOptions.run.find((o) => o.value)?.value;
+  check("fixture keys exist", strengthKey && runKey);
+
+  check("strength workout on a strength day → no flag", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }), [wo(D, "strengthTraining")])).length === 0);
+  check("strength workout on a run-only day → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "strengthTraining")])).length === 1);
+  check("run on a run day, no cardioTypes → no flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")])).length === 0);
+  const types = [{ id: "run", label: "Run", sports: ["running"], slot: "run" }];
+  check("run on a run day, with cardioTypes → no flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }, types), [wo(D, "running")])).length === 0);
+  check("run on a strength-only day, with cardioTypes mapping run → flag", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }, types), [wo(D, "running")])).length === 1);
+  check("run mapped to an unplanned slot → flag even though another slot is planned", flags(ctxOf(mkDef({ [idx]: { yoga: "session" } }, types), [wo(D, "running")])).length === 1);
+  check("run on a strength-only day, no cardioTypes → flag", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }), [wo(D, "running")])).length === 1);
+  const act = [{ day: D, payload: { activities: [{ id: "a1", name: "Walk" }] } }];
+  check("walk on a rest day with a client activity → no flag", flags(ctxOf(mkDef({}), [wo(D, "walking")], act)).length === 0);
+  check("walk on a rest day without → flag", flags(ctxOf(mkDef({}), [wo(D, "walking")])).length === 1);
+  const skip = [{ day: D, payload: { skip: "travel", activities: [{ id: "a1", name: "Walk" }] } }];
+  check("workout on a skip day → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)).length === 1, flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)));
 }
 
 // 6. Henna's string scales get labels
