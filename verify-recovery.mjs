@@ -200,6 +200,17 @@ ok("only deliberate training counts as a session, and the collapse did not distu
   assert.deepEqual(r.bySport.map((s) => s.sport), ["strengthTraining", "running"]);
 });
 
+ok("confirmed Oura sports count, confirmed housework and short walks do not (rule of 29 Sep 2026)", () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const run = { vendor: "oura", source: "confirmed", sport: "running", day: today, duration_minutes: 49 };
+  const chores = { vendor: "oura", source: "confirmed", sport: "houseWork", day: today, duration_minutes: 16 };
+  assert.equal(isRealSession(run), true, "a confirmed 49-min run counts");
+  assert.equal(isRealSession(chores), false, "a confirmed 16-min housework does not");
+  const r = buildRecovery([row("2026-09-27", "oura", VILLE)], [run, chores], VILLE);
+  assert.equal(r.sessions30, 1);
+  assert.equal(r.sessionMinutes30, 49);
+});
+
 console.log(`\n${checks - failures}/${checks} checks passed.`);
 console.log(`\nverify-recovery: ${checks - failures} passed, ${failures} failed`);
 process.exit(failures ? 1 : 0);
