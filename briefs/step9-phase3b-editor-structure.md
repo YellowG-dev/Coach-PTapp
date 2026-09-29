@@ -118,8 +118,10 @@ new controls for each fixture client without throwing.
 
 ## Out of scope
 
-Schedule, testing, daily sections, mobility, slotMeta, new **slots**, the
-diff view and saved drafts (3c), any client repo, any Supabase write.
+Schedule (moved to 3c — decided by John 29 Sep 2026: 3c = the weekly
+schedule editor first, then the diff view and saved drafts), testing, daily
+sections, mobility, slotMeta, new **slots**, any client repo, any Supabase
+write.
 
 ## Gates
 
