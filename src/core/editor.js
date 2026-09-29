@@ -7,9 +7,11 @@
 // reorder exercises, add / retire / restore blocks, cardio targets, heart-rate
 // zones and cardio types. Anything not named here — schedule, testing, daily,
 // mobility, tracking, slotMeta, programView, … — passes through untouched.
+// (3c): the weekly schedule, picker labels, a change list, and draft storage.
 // Blocks are never deleted: a retired block stays in `blocks` so history resolves.
 
 import { resolveForDate } from "./program-schema.js";
+import { getISOWeek } from "./dates.js";
 
 export const BLOCK_FIELDS = ["label", "subtitle", "gentlerNote", "noGym"];
 export const EXERCISE_FIELDS = [
@@ -143,6 +145,7 @@ export function listEditable(def) {
       subtitle: b.subtitle || "",
       gentlerNote: b.gentlerNote || "",
       noGym: Boolean(b.noGym),
+      optionLabel: ((opts[slot] || []).find((o) => o && o.value === key) || {}).label || "",
       cardio: b.cardio && typeof b.cardio === "object" ? clone(b.cardio) : {},
       exercises: (b.exercises || []).map((e) => ({
         id: e.id,
@@ -264,7 +267,7 @@ const optionsOf = (def, slot) => {
 };
 
 /** New empty block; key = slugify(label), unique within the slot. */
-export function addBlock(def, slot, label) {
+export function addBlock(def, slot, label, shortLabel) {
   const text = label === null || label === undefined ? "" : String(label);
   if (!text.trim()) throw new Error("A block label cannot be empty");
   const base = slugify(text);
@@ -275,7 +278,8 @@ export function addBlock(def, slot, label) {
   const taken = new Set([...Object.keys(out.blocks[slot]), ...opts.map((o) => o && o.value).filter((v) => typeof v === "string")]);
   const key = uniqueSlug(base, taken);
   out.blocks[slot][key] = { label: text, exercises: [] };
-  opts.push({ label: text, value: key });
+  const short = shortLabel === undefined || shortLabel === null || !String(shortLabel).trim() ? text : String(shortLabel);
+  opts.push({ label: short, value: key });
   return out;
 }
 
@@ -293,12 +297,13 @@ export function retireBlock(def, slot, key) {
   return out;
 }
 
-export function restoreBlock(def, slot, key) {
+export function restoreBlock(def, slot, key, shortLabel) {
   const out = clone(def);
   const { block } = locate(out, slot, key);
   const opts = optionsOf(out, slot);
   if (opts.some((o) => o && o.value === key)) throw new Error(`${slot}/${key} is not retired`);
-  opts.push({ label: block.label || key, value: key });
+  const short = shortLabel === undefined || shortLabel === null || !String(shortLabel).trim() ? block.label || key : String(shortLabel);
+  opts.push({ label: short, value: key });
   return out;
 }
 
@@ -359,4 +364,235 @@ export function setCardioTypes(def, types) {
   if (list.length) out.cardioTypes = list;
   else delete out.cardioTypes;
   return out;
+}
+
+/* ---------------------------- 3c: weekly schedule --------------------------- */
+
+const WEEKS = ["A", "B"];
+const DOWS = ["0", "1", "2", "3", "4", "5", "6"];
+/** Monday first — the order the UI and the change list use. */
+export const DOW_ORDER = ["1", "2", "3", "4", "5", "6", "0"];
+export const DOW_NAMES = { 0: "Sun", 1: "Mon", 2: "Tue", 3: "Wed", 4: "Thu", 5: "Fri", 6: "Sat" };
+
+const liveKeys = (def, slot) =>
+  ((def && def.slotOptions && def.slotOptions[slot]) || []).map((o) => o && o.value).filter((v) => typeof v === "string");
+
+/** Sets one cell of the default week. `blockKey` must be a live block of the slot, or null (written explicitly). */
+export function setScheduleCell(def, week, dow, slot, blockKey) {
+  if (!WEEKS.includes(week)) throw new Error(`Week must be A or B (got ${week})`);
+  if (!DOWS.includes(String(dow))) throw new Error(`Day must be "0"…"6" (got ${dow})`);
+  if (!Array.isArray(def && def.slots) || !def.slots.includes(slot)) throw new Error(`Unknown slot: ${slot}`);
+  const key = blockKey === undefined || blockKey === "" ? null : blockKey;
+  if (key !== null && !liveKeys(def, slot).includes(key)) {
+    throw new Error(`${slot}/${key} is not a live block (retired or unknown)`);
+  }
+  const out = clone(def);
+  if (!out.schedule) out.schedule = {};
+  if (!out.schedule[week]) out.schedule[week] = {};
+  const day = out.schedule[week][String(dow)] || (out.schedule[week][String(dow)] = {});
+  day[slot] = key;
+  return out;
+}
+
+/** Sets the day's note; empty removes it. */
+export function setDayNote(def, week, dow, text) {
+  if (!WEEKS.includes(week)) throw new Error(`Week must be A or B (got ${week})`);
+  if (!DOWS.includes(String(dow))) throw new Error(`Day must be "0"…"6" (got ${dow})`);
+  const out = clone(def);
+  if (!out.schedule) out.schedule = {};
+  if (!out.schedule[week]) out.schedule[week] = {};
+  const day = out.schedule[week][String(dow)] || (out.schedule[week][String(dow)] = {});
+  const v = text === null || text === undefined ? "" : String(text);
+  if (v.trim() === "") delete day.note;
+  else day.note = v;
+  return out;
+}
+
+/** Deep copy of one week onto the other. */
+export function copyWeek(def, from, to) {
+  if (!WEEKS.includes(from) || !WEEKS.includes(to) || from === to) throw new Error("copyWeek needs two different weeks, A and B");
+  const out = clone(def);
+  if (!out.schedule || !out.schedule[from]) throw new Error(`schedule.${from} is missing`);
+  out.schedule[to] = clone(out.schedule[from]);
+  return out;
+}
+
+/** "A" | "B" for a YYYY-MM-DD date — the engine's rule (ISO week even → A). */
+export function weekFor(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr));
+  if (!m) throw new Error(`Not a YYYY-MM-DD date: ${dateStr}`);
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return getISOWeek(d) % 2 === 0 ? "A" : "B";
+}
+
+/* ------------------------------ 3c: picker labels --------------------------- */
+
+/** Changes the slotOptions label (the short label in the client's picker) of a live block. */
+export function setOptionLabel(def, slot, key, label) {
+  const v = label === null || label === undefined ? "" : String(label);
+  if (!v.trim()) throw new Error("A picker label cannot be empty");
+  const out = clone(def);
+  locate(out, slot, key);
+  const opt = optionsOf(out, slot).find((o) => o && o.value === key);
+  if (!opt) throw new Error(`${slot}/${key} is retired; restore it first`);
+  opt.label = v;
+  return out;
+}
+
+/* ---------------------------------- 3c: diff -------------------------------- */
+
+const show = (v) => (v === undefined || v === null || v === "" ? "—" : typeof v === "string" ? `"${v}"` : JSON.stringify(v));
+const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+const CARDIO_LABEL = {
+  durationMin: ["duration", " min"], distanceKm: ["distance", " km"], zoneAvg: ["avg zone", ""], zoneMax: ["max zone", ""],
+  pace: ["pace", ""], note: ["note", ""], durationTaskId: ["duration field", ""],
+};
+const cell = (def, week, dow, slot) => {
+  const v = def && def.schedule && def.schedule[week] && def.schedule[week][dow] && def.schedule[week][dow][slot];
+  return v === undefined ? null : v;
+};
+
+function scheduleLines(base, draft) {
+  const out = [];
+  const slots = [...new Set([...(base.slots || []), ...(draft.slots || [])])];
+  for (const w of WEEKS) {
+    for (const slot of slots) {
+      const removed = [], added = [];
+      for (const d of DOW_ORDER) {
+        const a = cell(base, w, d, slot), b = cell(draft, w, d, slot);
+        if (a === b) continue;
+        if (a !== null && b !== null) out.push(`Schedule ${w} · ${DOW_NAMES[d]}: ${slot} ${a} → ${b}`);
+        else if (a !== null) removed.push([d, a]);
+        else added.push([d, b]);
+      }
+      // a block that left one day and appeared on another is one move
+      for (const [d, key] of removed) {
+        const j = added.findIndex(([, k]) => k === key);
+        if (j >= 0) {
+          out.push(`Schedule ${w} · ${slot} ${key}: ${DOW_NAMES[d]} → ${DOW_NAMES[added[j][0]]}`);
+          added.splice(j, 1);
+        } else out.push(`Schedule ${w} · ${DOW_NAMES[d]}: ${slot} ${key} → —`);
+      }
+      added.forEach(([d, key]) => out.push(`Schedule ${w} · ${DOW_NAMES[d]}: ${slot} — → ${key}`));
+    }
+    for (const d of DOW_ORDER) {
+      const a = base.schedule && base.schedule[w] && base.schedule[w][d] && base.schedule[w][d].note;
+      const b = draft.schedule && draft.schedule[w] && draft.schedule[w][d] && draft.schedule[w][d].note;
+      if (!same(a, b)) out.push(`Schedule ${w} · ${DOW_NAMES[d]}: note changed`);
+    }
+  }
+  return out;
+}
+
+/** Ids that stayed in place: everything outside a longest increasing run is "moved". */
+function movedIds(baseIds, draftIds) {
+  const common = draftIds.filter((id) => baseIds.includes(id));
+  const idx = common.map((id) => baseIds.indexOf(id));
+  const best = idx.map(() => 1), prev = idx.map(() => -1);
+  for (let i = 0; i < idx.length; i++) for (let j = 0; j < i; j++) if (idx[j] < idx[i] && best[j] + 1 > best[i]) { best[i] = best[j] + 1; prev[i] = j; }
+  let end = best.length ? best.indexOf(Math.max(...best)) : -1;
+  const keep = new Set();
+  for (let i = end; i >= 0; i = prev[i]) keep.add(common[i]);
+  return common.filter((id) => !keep.has(id));
+}
+
+/**
+ * The plain list the coach reads before publishing. Order: schedule, blocks,
+ * exercises, cardio, labels. Nothing is listed for what did not change.
+ */
+export function diffDefinitions(base, draft) {
+  const b0 = base || {}, d0 = draft || {};
+  const lines = scheduleLines(b0, d0);
+  const blockLines = [], exLines = [], cardioLines = [], labelLines = [];
+  const slots = [...new Set([...(b0.slots || []), ...(d0.slots || [])])];
+  for (const slot of slots) {
+    const bb = (b0.blocks && b0.blocks[slot]) || {}, db = (d0.blocks && d0.blocks[slot]) || {};
+    const liveB = new Set(liveKeys(b0, slot)), liveD = new Set(liveKeys(d0, slot));
+    for (const key of Object.keys(db)) {
+      const at = `${slot}/${key}`;
+      const nb = bb[key], nd = db[key];
+      if (!nb) {
+        blockLines.push(`Block added: ${at} ${show(nd.label)}`);
+      } else {
+        if (liveB.has(key) && !liveD.has(key)) blockLines.push(`Block retired: ${at}`);
+        if (!liveB.has(key) && liveD.has(key)) blockLines.push(`Block restored: ${at}`);
+        for (const f of BLOCK_FIELDS) {
+          if (!same(nb[f], nd[f])) blockLines.push(`Block ${at} ${f}: ${show(nb[f])} → ${show(nd[f])}`);
+        }
+      }
+      // exercises
+      const be = (nb && nb.exercises) || [], de = nd.exercises || [];
+      const byId = new Map(be.map((e) => [e.id, e]));
+      const dIds = new Set(de.map((e) => e.id));
+      de.forEach((e) => {
+        const o = byId.get(e.id);
+        if (!o) { exLines.push(`Exercise added to ${at}: ${e.name} (${e.id})`); return; }
+        const fields = [...new Set([...Object.keys(o), ...Object.keys(e)])].filter((f) => f !== "id");
+        fields.forEach((f) => { if (!same(o[f], e[f])) exLines.push(`Field changed in ${at}: ${e.name} (${e.id}) ${f} ${show(o[f])} → ${show(e[f])}`); });
+      });
+      be.forEach((e) => { if (!dIds.has(e.id)) exLines.push(`Exercise removed from ${at}: ${e.name} (${e.id})`); });
+      movedIds(be.map((e) => e.id), de.map((e) => e.id)).forEach((id) => {
+        const e = de.find((x) => x.id === id);
+        exLines.push(`Exercise moved in ${at}: ${e.name} (${id})`);
+      });
+      // cardio target
+      const ca = (nb && nb.cardio) || {}, cd = nd.cardio || {};
+      [...new Set([...Object.keys(ca), ...Object.keys(cd)])].forEach((f) => {
+        if (same(ca[f], cd[f])) return;
+        const [name, unit] = CARDIO_LABEL[f] || [f, ""];
+        cardioLines.push(`Cardio target ${at}: ${name} ${ca[f] === undefined ? "—" : ca[f]} → ${cd[f] === undefined ? "—" : cd[f] + unit}`);
+      });
+      // picker label (blocks live on both sides)
+      if (nb && liveB.has(key) && liveD.has(key)) {
+        const la = (b0.slotOptions[slot].find((o) => o && o.value === key) || {}).label;
+        const ld = (d0.slotOptions[slot].find((o) => o && o.value === key) || {}).label;
+        if (!same(la, ld)) labelLines.push(`Picker label ${at}: ${show(la)} → ${show(ld)}`);
+      }
+    }
+  }
+  if (!same(b0.hrZones, d0.hrZones)) cardioLines.push("Zones changed");
+  if (!same(b0.cardioTypes, d0.cardioTypes)) cardioLines.push("Cardio types changed");
+  return [...lines, ...blockLines, ...exLines, ...cardioLines, ...labelLines];
+}
+
+/* ------------------------------ 3c: saved drafts ---------------------------- */
+// `storage` is a Storage-like object ({ getItem, setItem, removeItem }), so the
+// model can be tested with stubs. Every call is guarded: no storage, or storage
+// that throws, means "nothing saved" — never an error.
+
+export const draftKey = (personId) => `coachDraft_${personId}`;
+
+export function saveDraft(storage, personId, baseId, draft, now) {
+  try {
+    storage.setItem(draftKey(personId), JSON.stringify({ baseId, savedAt: now || new Date().toISOString(), draft }));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** @returns {{ baseId, savedAt, draft } | null} */
+export function loadDraft(storage, personId) {
+  try {
+    const raw = storage.getItem(draftKey(personId));
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" && o.draft && typeof o.draft === "object" && typeof o.baseId === "string" ? o : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+export function clearDraft(storage, personId) {
+  try {
+    storage.removeItem(draftKey(personId));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** "resume" if the saved draft was made on the version now in force, else "stale" (someone published meanwhile). */
+export function draftStatus(saved, currentBaseId) {
+  return saved && saved.baseId === currentBaseId ? "resume" : "stale";
 }
