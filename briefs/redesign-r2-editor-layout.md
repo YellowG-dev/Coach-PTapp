@@ -1,7 +1,7 @@
 # Coach redesign · R2 — Programme editor layout with drag-and-drop week
 
-Status: **READY — start only after R1 is merged.** Written 29 Sep 2026 from
-Coach `main` at `a4b67cd` (0.8.0); R1 takes it to 0.9.0. Branch: the
+Status: **READY.** Written 29 Sep 2026; §0 added after R1 merged, from
+Coach `main` at `5a92830` (0.9.0). Branch: the
 session's own (see README). If `main` does not contain R1 (the tabbed shell,
 `COACH_VERSION` 0.9.0), stop and report.
 
@@ -35,6 +35,54 @@ confirmation and required-field rules stay exactly as they are.
   blocks may be placed in a new schedule (`setScheduleCell` throws otherwise).
 
 ## Scope
+
+### 0. Two Overview fixes from R1 review — `src/core/overview.js`
+
+Decided by John 29 Sep 2026 after checking R1 against live data.
+
+**a) `str` (Strength sessions) counts days, from the app log or the watch,
+only while a programme is in force.** Today `strMetric` counts watch
+`strengthTraining` workouts over 7 calendar days, while "planned" counts only
+days with a programme — so Ville showed "4 of 2 planned" (two of the four
+were before his programme started on 28 Sep), and anyone who logs strength
+only in the app is never counted.
+- Window: the last 7 days incl. today, **minus days with no version in force**
+  (`versionFor(ctx, date)` null).
+- Done: a day counts once if **either** the app log scored strength done for
+  that day (`ctx.adherence.days[].byCat.strength.done > 0`) **or** a real,
+  deduped `strengthTraining` workout exists that day. Two sources on one day
+  = one day.
+- Planned: days in the same window whose resolved schedule has a strength
+  block (unchanged).
+- Value `done`, note `of N planned`; when the window was shortened, note
+  `of N planned · since <d.m.>`. No programme in the whole window → `null`,
+  "No programme in force". No longer requires a wearable connection (the app
+  log alone is enough).
+- Expected on today's live data (29 Sep): Ville `2`, "of 2 planned · since
+  28.9."; Juha `0`, "of 1 planned" (his only strength day is today, not yet
+  done).
+
+**b) "Unplanned session" = a workout that matches nothing planned that day.**
+Today any real workout on a day with no planned non-strength slot is flagged,
+so a strength workout on a strength day is flagged. New rule, per real,
+deduped workout of a day up to today:
+- `strengthTraining` matches if that day's resolved schedule has a strength
+  block.
+- Any other sport matches if a `cardioTypes` entry lists the sport and its
+  `slot` is planned that day; if **no** `cardioTypes` entry lists the sport
+  (true for every live programme today — none has `cardioTypes`), it matches
+  when any non-strength slot is planned **or** the client added an activity
+  to that day (`overrides[day].activities` non-empty). Unknown mapping must
+  not raise a false alarm.
+- Flag only workouts that match nothing. Skip days: a workout on a skip day
+  is flagged (the client cleared the day, then trained).
+
+Tests (add to `verify-overview.mjs`): strength workout on a strength day →
+no flag; strength workout on a run-only day → flag; run on a run day with
+and without `cardioTypes`; walk on a rest day with a client activity → no
+flag; walk on a rest day without → flag; `str` with watch + app log on the
+same day counts 1; `str` window shortened by a programme start shows
+"since"; app-log-only person (no wearable) gets a number, not "—".
 
 ### 1. Model — `src/core/editor.js`
 
@@ -102,6 +150,7 @@ one slot · touch drag · client repos · Supabase.
 
 All existing gates `0 failed` (incl. R1's `verify-overview`) plus:
 
+- **verify-overview**: the §0 tests, plus all existing ones still passing.
 - **verify-editor**: `moveScheduleCell` — move to an empty day; swap with an
   occupied day; same day is a no-op; empty source throws; moving a retired
   block already placed works; the diff of a swap lists both cells; Ville
