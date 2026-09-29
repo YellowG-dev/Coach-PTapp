@@ -15,6 +15,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildAllAdherence } from "./src/core/adherence.js";
 import { Adherence, DayCard, Publisher } from "./src/app.jsx";
+import { ProgrammeEditor } from "./src/editor.jsx";
 import { buildNameMap } from "./src/core/names.js";
 
 const ID={juha:"1da21dd7-5f90-423b-ba6c-bf8dc3dd8dee",henna:"5b757e16-813a-46f6-be67-423ff3b093cc",joonatan:"47ba0f5b-9844-4a24-81ca-f561a7b2fc9d"};
@@ -64,5 +65,30 @@ for(const needle of ["Effective from","Program definition","their app runs this 
   if(!opened.includes(needle)){console.log("    open form missing: "+needle);bad++;}
 }
 if(/Publish<\/button>/.test(opened)){console.log("    Publish button rendered before any check passed");bad++;}
+// The programme editor: collapsed and open for every fixture client.
+const ville="2a545525-d9a4-450c-b90b-ce04d8f48abe";
+const edRoster=[{id:ID.juha,name:"Juha"},{id:ID.henna,name:"Henna"},{id:ID.joonatan,name:"Joonatan"},{id:ville,name:"Ville"}];
+const ed=(person,defaultOpen)=>renderToStaticMarkup(React.createElement(ProgrammeEditor,{person,programs,logRows:[],ownerId:person.id,onPublished:()=>{},defaultOpen}));
+for(const p of edRoster){
+  let c="",o="";
+  try{c=ed(p,false);o=ed(p,true);}catch(e){console.log("    editor threw for "+p.name+": "+e.message);bad++;continue;}
+  console.log(`  editor ${p.name.padEnd(9)} collapsed ${String(c.length).padStart(5)}  open ${String(o.length).padStart(6)} chars`);
+  if(c.length===o.length){console.log("    editor open == collapsed");bad++;}
+  if(!c.includes("Edit programme for "+p.name)){console.log("    editor collapsed label missing");bad++;}
+  for(const needle of ["Based on:","Effective from","Check"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  if(/Publish<\/button>/.test(o)){console.log("    editor Publish button before any check");bad++;}
+}
+// retired blocks render read-only: Juha's strength "full" is in blocks but not in slotOptions
+{
+  const o=ed({id:ID.juha,name:"Juha"},true);
+  const i=o.indexOf("full · retired");
+  if(i<0){console.log("    retired block not marked");bad++;}
+  else{
+    const seg=o.slice(i,o.indexOf("</div>",i)+6);
+    if(/<input/.test(seg)){console.log("    retired block renders inputs");bad++;}
+    else console.log("  retired block read-only");
+  }
+  if(!/<input[^>]*value="Dumbbell bench press"/.test(o)){console.log("    live exercise name input missing");bad++;}
+}
 console.log(bad?`\n${bad} render problem(s)`:"\nAll render checks passed.");
 process.exit(bad?1:0);
