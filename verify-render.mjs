@@ -75,7 +75,9 @@ for(const p of edRoster){
   console.log(`  editor ${p.name.padEnd(9)} collapsed ${String(c.length).padStart(5)}  open ${String(o.length).padStart(6)} chars`);
   if(c.length===o.length){console.log("    editor open == collapsed");bad++;}
   if(!c.includes("Edit programme for "+p.name)){console.log("    editor collapsed label missing");bad++;}
-  for(const needle of ["Based on:","Effective from","Check"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  for(const needle of ["Based on:","Effective from","Check","Add existing","Add new","Add block","Retire","Remove","Heart-rate zones","Use standard PK1/PK2/VK","Cardio types","Add cardio type"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  if(p.id!==ID.joonatan && !o.includes("Cardio target")){console.log("    editor open missing: Cardio target");bad++;}
+  if(p.id!==ID.joonatan && !o.includes("Zones need a heart-rate zone table")){console.log("    editor open missing: no-zones hint");bad++;}
   if(/Publish<\/button>/.test(o)){console.log("    editor Publish button before any check");bad++;}
 }
 // retired blocks render read-only: Juha's strength "full" is in blocks but not in slotOptions
@@ -88,6 +90,7 @@ for(const p of edRoster){
     if(/<input/.test(seg)){console.log("    retired block renders inputs");bad++;}
     else console.log("  retired block read-only");
   }
+  if(!o.includes("Restore")){console.log("    retired block has no Restore");bad++;}
   if(!/<input[^>]*value="Dumbbell bench press"/.test(o)){console.log("    live exercise name input missing");bad++;}
 }
 console.log(bad?`\n${bad} render problem(s)`:"\nAll render checks passed.");
