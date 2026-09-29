@@ -9,6 +9,8 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
 import { loadAll, insertProgramVersion } from "./core/data.js";
 import { preflight } from "./core/publish.js";
+import { CheckResult } from "./check-result.jsx";
+import { ProgrammeEditor } from "./editor.jsx";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
@@ -334,6 +336,14 @@ function PersonPanel({ person, days, total, adherence, pctByDay, recovery, conne
         </>
       )}
 
+      <ProgrammeEditor
+        person={person}
+        programs={programs}
+        logRows={logRows}
+        ownerId={ownerId}
+        onPublished={onPublished}
+      />
+
       <Publisher
         person={person}
         programs={programs}
@@ -424,9 +434,6 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
     );
   }
 
-  const findings = result && result.validation ? result.validation.findings : [];
-  const info = findings.filter((f) => f.severity === "info");
-
   return (
     <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mt-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -493,46 +500,7 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
         )}
       </div>
 
-      {result && (
-        <div className="mt-3 space-y-2">
-          {result.inForce && (
-            <p style={{ color: T.textMuted }} className="text-[11px]">
-              Replacing from {when} onward: {result.inForce.name} (effective {String(result.inForce.effective_from)})
-            </p>
-          )}
-          {result.blocking.map((b, i) => (
-            <p key={"b" + i} style={{ color: T.warn }} className="text-[11px] leading-relaxed">
-              ✕ {b}
-            </p>
-          ))}
-          {result.warnings.map((w, i) => (
-            <p key={"w" + i} style={{ color: T.accent }} className="text-[11px] leading-relaxed">
-              ⚠ {w}
-            </p>
-          ))}
-          {result.ok && (
-            <p style={{ color: T.good }} className="text-[11px]">
-              ✓ Checks passed. {info.length} informational change{info.length === 1 ? "" : "s"}
-              {result.validation ? ` · ${result.validation.summary.idsAfter} IDs, ${result.validation.summary.idsLogged} seen in history` : ""}.
-              {result.row ? ` Will insert as ${result.row.id}.` : ""}
-            </p>
-          )}
-          {info.length > 0 && (
-            <details>
-              <summary style={{ color: T.textSecondary }} className="text-[11px] cursor-pointer">
-                Show {info.length} informational finding{info.length === 1 ? "" : "s"}
-              </summary>
-              <div className="mt-1 space-y-0.5">
-                {info.map((f, i) => (
-                  <p key={i} style={{ color: T.textMuted }} className="text-[10px]">
-                    {f.message}
-                  </p>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
+      <CheckResult result={result} when={when} />
 
       {published && (
         <p
