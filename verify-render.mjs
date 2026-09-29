@@ -4,7 +4,7 @@
 // app.jsx is JSX, so this needs bundling first. From the repo root:
 //
 //   npx esbuild verify-render.mjs --bundle --loader:.jsx=jsx --platform=node \
-//     --format=esm --outfile=render.bundle.mjs --external:react --external:react-dom \
+//     --format=esm --outfile=render.bundle.mjs --packages=external \
 //     && node render.bundle.mjs && rm render.bundle.mjs
 //
 // Programs and logs both come from ./fixtures, so it depends on nothing
@@ -14,7 +14,9 @@ import fs from "fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { buildAllAdherence } from "./src/core/adherence.js";
-import { Adherence, DayCard, Publisher } from "./src/app.jsx";
+import { Adherence, DayCard, Publisher, PersonPanel, TABS, parseHash } from "./src/app.jsx";
+import { buildPersonCtx } from "./src/core/overview.js";
+import { buildRecovery } from "./src/core/recovery.js";
 import { ProgrammeEditor } from "./src/editor.jsx";
 import { buildNameMap } from "./src/core/names.js";
 
@@ -102,6 +104,39 @@ for(const p of edRoster){
   }
   if(!o.includes("Restore")){console.log("    retired block has no Restore");bad++;}
   if(!/<input[^>]*value="Dumbbell bench press"/.test(o)){console.log("    live exercise name input missing");bad++;}
+}
+// R1 shell: the Overview and every tab, for each fixture person and the ghost.
+{
+  const shellRoster=[...roster.slice(0,3),{id:ville,name:"Ville"},roster[3]];
+  const shellLogs={...logs,[ville]:[]};
+  const data={roster:shellRoster,logs:shellLogs,overrides:ov,programs,wearables:{connections:[],days:{},workouts:{}}};
+  const adh2=buildAllAdherence(shellRoster,shellLogs,ov,programs);
+  for(const p of shellRoster){
+    const names=buildNameMap(programs.filter(r=>r.assigned_to===p.id).map(r=>({definition:r.definition})),ov[p.id]);
+    const ctx=buildPersonCtx(data,{...p,state:"ok"},{today:new Date(2026,8,18),recovery:buildRecovery([],[],p.id),adherence:adh2[p.id],names,draft:null});
+    const lens=[];
+    for(const t of TABS){
+      let h="";
+      try{
+        h=renderToStaticMarkup(React.createElement(PersonPanel,{tab:t.id,person:{...p,state:"ok"},days:[],total:(shellLogs[p.id]||[]).length,adherence:adh2[p.id],pctByDay:{},recovery:ctx.recovery,connections:[],names,programs,logRows:shellLogs[p.id]||[],ownerId:p.id,ctx,onPublished:()=>{},onMore:()=>{}}));
+      }catch(e){console.log("    tab "+t.id+" threw for "+p.name+": "+e.message);bad++;continue;}
+      lens.push(t.id+":"+h.length);
+      if(!h.length){console.log("    tab "+t.id+" empty for "+p.name);bad++;}
+      if(/NaN|undefined|\[object/.test(h)){console.log("    tab "+t.id+" leaks NaN/undefined for "+p.name);bad++;}
+      if(t.id==="overview"){
+        for(const needle of ["This week · planned vs done","Needs attention","Recent sessions","Recovery · 7 nights","Choose what box 1 shows","Choose what box 4 shows"]) if(!h.includes(needle)){console.log("    overview missing: "+needle+" ("+p.name+")");bad++;}
+        if((h.match(/<select/g)||[]).length!==4){console.log("    overview should have 4 selects");bad++;}
+        if((h.match(/data-day="/g)||[]).length!==7){console.log("    overview week grid should have 7 days");bad++;}
+      }
+      if(t.id==="versions"&&!h.includes("Publish a new program version")){console.log("    versions tab missing collapsed publisher ("+p.name+")");bad++;}
+      if(t.id==="programme"&&p.id!=="ghost"&&!h.includes("Based on:")){console.log("    programme tab not open by default ("+p.name+")");bad++;}
+    }
+    console.log(`  shell ${p.name.padEnd(9)} ${lens.join(" ")}`);
+  }
+  const paused=renderToStaticMarkup(React.createElement(PersonPanel,{tab:"overview",person:{id:"x",name:"X",state:"paused"},days:[],total:0,programs:[],logRows:[],onPublished:()=>{}}));
+  if(!paused.includes("Sharing is paused")){console.log("    paused notice missing");bad++;} else console.log("  paused notice renders");
+  const hp=parseHash("#/abc/recovery"), hq=parseHash("#/abc/nonsense"), hr=parseHash("");
+  if(hp.personId!=="abc"||hp.tab!=="recovery"||hq.tab!==null||hr.personId!==null){console.log("    parseHash wrong");bad++;}
 }
 console.log(bad?`\n${bad} render problem(s)`:"\nAll render checks passed.");
 process.exit(bad?1:0);

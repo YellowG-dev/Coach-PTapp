@@ -1,9 +1,8 @@
-// Coach-PTapp — dashboard v1.
+// Coach-PTapp — dashboard.
 //
-// One client at a time, chosen with the person switcher; below it, that
-// person's logged days newest first, showing exactly what they recorded.
-// No percentages and no adherence scoring: those need program definitions in
-// Supabase, which is Phase 5. Everything here is a raw value the client typed.
+// One client at a time, chosen in the sidebar (top switcher below 1024 px);
+// the client's page is a tab row: Overview, Training log, Recovery, Programme,
+// Versions. Client and tab live in the URL hash (#/<personId>/<tab>).
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
@@ -15,17 +14,38 @@ import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } fro
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
 import { buildRecovery, connectionLabel, fmtSleep, fmtNum } from "./core/recovery.js";
+import { Overview } from "./overview.jsx";
+import { buildPersonCtx, needsAttention } from "./core/overview.js";
+import { loadDraft } from "./core/editor.js";
+import { resolveForDate } from "./core/program-schema.js";
 import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
 const PAGE = 20; // days rendered before "show earlier"
+
+export const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "log", label: "Training log" },
+  { id: "recovery", label: "Recovery" },
+  { id: "programme", label: "Programme" },
+  { id: "versions", label: "Versions" },
+];
+
+/** "#/<personId>/<tab>" → { personId, tab }; anything unknown is left null. */
+export function parseHash(hash) {
+  const m = /^#\/([^/]+)(?:\/([^/]+))?/.exec(hash || "");
+  const tab = m && TABS.some((t) => t.id === m[2]) ? m[2] : null;
+  return { personId: m ? decodeURIComponent(m[1]) : null, tab };
+}
+
+const readHash = () => (typeof window === "undefined" ? { personId: null, tab: null } : parseHash(window.location.hash));
 
 export default function CoachApp() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
+  const [route, setRoute] = useState(readHash);
   const [visible, setVisible] = useState(PAGE);
   // Bumped after a successful publish so the loader re-runs and the days are
   // re-scored against the new version. A state key rather than re-setting
@@ -64,14 +84,17 @@ export default function CoachApp() {
       if (dead) return;
       setData(result);
       setLoading(false);
-      setSelectedId((prev) => prev || result.roster[0]?.id || null);
     })();
     return () => {
       dead = true;
     };
   }, [user, reloadKey]);
 
-  useEffect(() => setVisible(PAGE), [selectedId]);
+  useEffect(() => {
+    const onHash = () => setRoute(readHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // EVERY hook must run on EVERY render, so all of them live above the early
   // returns below. The first draft of Phase 6 put these two useMemo calls
@@ -79,7 +102,10 @@ export default function CoachApp() {
   // hooks and the second registered 11. React aborts the whole tree on that
   // mismatch, and the page renders as nothing at all.
   const roster = data?.roster || [];
-  const person = roster.find((p) => p.id === selectedId) || roster[0] || null;
+  const person = roster.find((p) => p.id === route.personId) || roster[0] || null;
+  const tab = route.tab || "overview";
+  const personKey = person ? person.id : null;
+  useEffect(() => setVisible(PAGE), [personKey]);
   const days = person && data ? mergeDays(data, person.id) : [];
   // Scored for the whole roster at once, not just the selected person: the
   // switcher shows each person's headline number, and computing it per
@@ -115,6 +141,35 @@ export default function CoachApp() {
     return buildNameMap(versions, (data.overrides || {})[person.id]);
   }, [data, person]);
 
+  const ctx = useMemo(() => {
+    if (!data || !data.ok || !person || person.state === "paused") return null;
+    return buildPersonCtx(data, person, {
+      today: new Date(),
+      recovery,
+      adherence: personAdherence,
+      names,
+    });
+  }, [data, person, recovery, personAdherence, names]);
+  // Sidebar dots: one attention check per person, scored once per load.
+  // Drafts are read at render time (below) so a saved draft shows at once.
+  const attention = useMemo(() => {
+    const out = {};
+    if (!data || !data.ok) return out;
+    const today = new Date();
+    roster.forEach((p) => {
+      if (p.state === "paused") return;
+      const w = data.wearables || {};
+      const c = buildPersonCtx(data, p, {
+        today,
+        recovery: buildRecovery((w.days || {})[p.id] || [], (w.workouts || {})[p.id] || [], p.id),
+        adherence: adherence[p.id] || null,
+        names: {},
+      });
+      out[p.id] = { ctx: c, count: needsAttention(c).length };
+    });
+    return out;
+  }, [data, roster, adherence]);
+
   if (checking) {
     return (
       <Shell>
@@ -124,42 +179,88 @@ export default function CoachApp() {
   }
   if (!user) return <SignIn />;
 
+  const goto = (personId, t) => {
+    window.location.hash = `#/${encodeURIComponent(personId)}/${t}`;
+  };
+  const dots = {};
+  roster.forEach((p) => {
+    if (p.state === "paused") dots[p.id] = "paused";
+    else {
+      const a = attention[p.id];
+      const draft = a ? loadDraft(safeStorage(), p.id) : null;
+      dots[p.id] = a && (a.count > 0 || draft) ? "attention" : "ok";
+    }
+  });
+
+  if (!data || !data.ok) {
+    return (
+      <Shell>
+        <Header email={user.email} />
+        {loading && <Muted>Loading training data…</Muted>}
+        {data && !data.ok && <Problem>{data.error}</Problem>}
+      </Shell>
+    );
+  }
+
   return (
-    <Shell>
-      <Header email={user.email} />
-
-      {loading && <Muted>Loading training data…</Muted>}
-      {data && !data.ok && <Problem>{data.error}</Problem>}
-
-      {data && data.ok && (
-        <>
-          <Switcher roster={roster} selectedId={person ? person.id : null} onSelect={setSelectedId} />
+    <Shell wide>
+      <div className="lg:flex lg:min-h-screen">
+        <Sidebar
+          roster={roster}
+          selectedId={person ? person.id : null}
+          onSelect={(id) => goto(id, tab)}
+          programs={data.programs || []}
+          dots={dots}
+          email={user.email}
+        />
+        <main className="flex-1 min-w-0 px-5 py-6 lg:px-8">
+          {loading && <Muted>Loading training data…</Muted>}
           {person && (
-            <PersonPanel
-              person={person}
-              days={days.slice(0, visible)}
-              total={days.length}
-              adherence={personAdherence}
-              pctByDay={pctByDay}
-              recovery={recovery}
-              connections={connections}
-              names={names}
-              programs={data.programs || []}
-              logRows={(data.logs || {})[person.id] || []}
-              ownerId={user.id}
-              onPublished={() => setReloadKey((k) => k + 1)}
-              onMore={() => setVisible((v) => v + PAGE)}
-            />
+            <>
+              <ClientHeader person={person} programs={data.programs || []} connections={connections} />
+              <TabRow tab={tab} onSelect={(t) => goto(person.id, t)} />
+              <PersonPanel
+                key={person.id}
+                tab={tab}
+                person={person}
+                days={days.slice(0, visible)}
+                total={days.length}
+                adherence={personAdherence}
+                pctByDay={pctByDay}
+                recovery={recovery}
+                connections={connections}
+                names={names}
+                programs={data.programs || []}
+                logRows={(data.logs || {})[person.id] || []}
+                ownerId={user.id}
+                ctx={ctx ? { ...ctx, draft: draftInfo(person.id) } : null}
+                onPublished={() => setReloadKey((k) => k + 1)}
+                onMore={() => setVisible((v) => v + PAGE)}
+              />
+            </>
           )}
-        </>
-      )}
 
-      <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
-        Coach dashboard {COACH_VERSION} · logged values with adherence scored against the program in force on each
-        day. Exercise names still show as IDs.
-      </p>
+          <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
+            Coach dashboard {COACH_VERSION} · laptop layout: sidebar per client, Overview first. Logged values with
+            adherence scored against the program in force on each day. Exercise names still show as IDs.
+          </p>
+        </main>
+      </div>
     </Shell>
   );
+}
+
+function safeStorage() {
+  try {
+    return window.localStorage;
+  } catch (e) {
+    return { getItem: () => null };
+  }
+}
+
+function draftInfo(personId) {
+  const d = loadDraft(safeStorage(), personId);
+  return d ? { savedAt: d.savedAt } : null;
 }
 
 /* ------------------------------- data joins ------------------------------- */
@@ -259,27 +360,128 @@ function Header({ email }) {
   );
 }
 
-function Switcher({ roster, selectedId, onSelect }) {
+const DOT = {
+  ok: { colour: () => T.good, text: "Nothing needs attention" },
+  attention: { colour: () => T.accent, text: "Needs attention" },
+  paused: { colour: () => T.textMuted, text: "Sharing paused" },
+};
+
+function programmeLabel(programs, person) {
+  const rows = programs.filter((r) => r.assigned_to === person.id && r.definition);
+  const v = resolveForDate(rows, new Date());
+  return v ? v.name : "No programme";
+}
+
+/** 240 px column at >= 1024 px; below that it is the old top switcher. */
+function Sidebar({ roster, selectedId, onSelect, programs, dots, email }) {
   return (
-    <div className="flex gap-2 flex-wrap mb-5">
-      {roster.map((p) => {
-        const active = p.id === selectedId;
+    <aside
+      style={{ borderColor: T.border, background: T.bg }}
+      className="px-5 py-4 border-b lg:border-b-0 lg:border-r lg:w-60 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col lg:px-4 lg:py-5"
+    >
+      <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold lg:mb-4">
+        Coach
+      </h1>
+      <nav aria-label="Clients" className="flex gap-2 flex-wrap mt-3 lg:mt-0 lg:block lg:space-y-1 lg:flex-1 lg:overflow-y-auto">
+        {roster.map((p) => {
+          const active = p.id === selectedId;
+          const dot = DOT[dots[p.id] || "ok"];
+          return (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              aria-current={active ? "page" : undefined}
+              style={{
+                background: active ? T.card : "transparent",
+                borderColor: active ? T.accent : T.border,
+                color: T.textPrimary,
+              }}
+              className="text-left rounded-lg border px-3 py-2 lg:w-full focus:outline-none focus-visible:ring-2"
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  style={{ background: dot.colour() }}
+                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                />
+                <span className="sr-only">{dot.text}: </span>
+                <span className="text-sm font-semibold truncate">{p.name}</span>
+                {p.isSelf && <span style={{ color: T.textMuted }} className="text-[11px]">(you)</span>}
+              </span>
+              <span style={{ color: T.textMuted }} className="block text-[11px] mt-0.5 truncate">
+                {p.state === "paused" ? "sharing paused" : programmeLabel(programs, p)}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-4 lg:mt-3 flex items-center justify-between gap-3 lg:block">
+        <div className="min-w-0">
+          <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[10px]">
+            Coach {COACH_VERSION}
+          </p>
+          <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px] truncate">
+            {email}
+          </p>
+        </div>
+        <button
+          onClick={signOut}
+          style={{ borderColor: T.border, color: T.textSecondary }}
+          className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border lg:mt-2 lg:w-full focus:outline-none focus-visible:ring-2"
+        >
+          Sign out
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function ClientHeader({ person, programs, connections }) {
+  const rows = programs.filter((r) => r.assigned_to === person.id && r.definition);
+  const v = resolveForDate(rows, new Date());
+  return (
+    <div className="mb-4">
+      <h2 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold">
+        {person.name}
+      </h2>
+      <div className="flex items-center gap-2 flex-wrap mt-1">
+        <span style={{ color: T.textSecondary }} className="text-xs">
+          {v ? `${v.name} · from ${fromLabel(v.effective_from)}` : "No programme assigned"}
+        </span>
+        {person.state !== "paused" &&
+          connections.map((c) => {
+            const l = connectionLabel(c);
+            return (
+              <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
+                {c.vendor} · {l.text}
+              </Tag>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
+const fromLabel = (v) => (v === "-infinity" || v == null ? "the start" : String(v).slice(0, 10));
+
+function TabRow({ tab, onSelect }) {
+  return (
+    <div role="tablist" style={{ borderColor: T.border }} className="flex gap-1 border-b mb-4 overflow-x-auto">
+      {TABS.map((t) => {
+        const active = t.id === tab;
         return (
           <button
-            key={p.id}
-            onClick={() => onSelect(p.id)}
+            key={t.id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(t.id)}
             style={{
-              background: active ? T.accent : "transparent",
-              color: active ? T.onAccent : T.textSecondary,
-              borderColor: active ? T.accent : T.border,
+              color: active ? T.textPrimary : T.textSecondary,
+              borderColor: active ? T.accent : "transparent",
             }}
-            className="text-sm font-semibold px-3.5 py-2 rounded-xl border text-left focus:outline-none focus-visible:ring-2"
+            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 -mb-px focus:outline-none focus-visible:ring-2"
           >
-            <span>{p.name}</span>
-            {p.isSelf && <span style={{ opacity: 0.65 }}> (you)</span>}
-            <span style={{ fontFamily: FONT_MONO, opacity: 0.75 }} className="block text-[11px] font-normal">
-              {p.state === "paused" ? "sharing paused" : `${p.days} ${p.days === 1 ? "day" : "days"}`}
-            </span>
+            {t.label}
           </button>
         );
       })}
@@ -287,7 +489,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, ownerId, onPublished, onMore }) {
+export function PersonPanel({ tab = "overview", person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, ownerId, ctx, onPublished, onMore }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -302,56 +504,118 @@ function PersonPanel({ person, days, total, adherence, pctByDay, recovery, conne
   return (
     <>
       {person.state === "unnamed" && (
-        <Notice tone="warn" title="No profile row">
-          This person is sharing with you, but has no row in profiles, so there is no name to show. Their data below is
-          complete — only the label is missing.
-        </Notice>
+        <div className="mb-3">
+          <Notice tone="warn" title="No profile row">
+            This person is sharing with you, but has no row in profiles, so there is no name to show. Their data below is
+            complete — only the label is missing.
+          </Notice>
+        </div>
       )}
 
-      {/* Above the logged days on purpose: a person can have wearable data
-          before they have logged a single session, and that is worth seeing. */}
-      <Recovery recovery={recovery} connections={connections} person={person} />
+      {tab === "overview" && ctx && <Overview key={person.id} ctx={ctx} />}
 
-      {total === 0 ? (
-        <Notice tone="quiet" title="No days logged yet">
-          {person.name} is sharing with you, and nothing has been recorded so far.
-        </Notice>
-      ) : (
+      {tab === "log" &&
+        (total === 0 ? (
+          <Notice tone="quiet" title="No days logged yet">
+            {person.name} is sharing with you, and nothing has been recorded so far.
+          </Notice>
+        ) : (
+          <>
+            <Adherence person={person} adherence={adherence} />
+            <div className="space-y-3">
+              {days.map((d) => (
+                <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} names={names} />
+              ))}
+            </div>
+            {days.length < total && (
+              <button
+                onClick={onMore}
+                style={{ borderColor: T.border, color: T.textSecondary }}
+                className="w-full mt-3 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
+              >
+                Show earlier days · {total - days.length} more
+              </button>
+            )}
+          </>
+        ))}
+
+      {tab === "recovery" &&
+        (recovery || (connections || []).length ? (
+          <Recovery recovery={recovery} connections={connections} person={person} />
+        ) : (
+          <Notice tone="quiet" title="No wearable connected">
+            {person.name} has no Oura or Polar connection, so there is no sleep, readiness or heart data to show.
+          </Notice>
+        ))}
+
+      {tab === "programme" && (
+        <ProgrammeEditor
+          person={person}
+          programs={programs}
+          logRows={logRows}
+          ownerId={ownerId}
+          onPublished={onPublished}
+          defaultOpen
+        />
+      )}
+
+      {tab === "versions" && (
         <>
-          <Adherence person={person} adherence={adherence} />
-          <div className="space-y-3">
-            {days.map((d) => (
-              <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} names={names} />
-            ))}
-          </div>
-          {days.length < total && (
-            <button
-              onClick={onMore}
-              style={{ borderColor: T.border, color: T.textSecondary }}
-              className="w-full mt-3 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
-            >
-              Show earlier days · {total - days.length} more
-            </button>
-          )}
+          <VersionsTable person={person} programs={programs} />
+          <Publisher
+            person={person}
+            programs={programs}
+            logRows={logRows}
+            ownerId={ownerId}
+            onPublished={onPublished}
+            defaultOpen={false}
+          />
         </>
       )}
-
-      <ProgrammeEditor
-        person={person}
-        programs={programs}
-        logRows={logRows}
-        ownerId={ownerId}
-        onPublished={onPublished}
-      />
-
-      <Publisher
-        person={person}
-        programs={programs}
-        logRows={logRows}
-        ownerId={ownerId}
-        onPublished={onPublished}
-      />
     </>
+  );
+}
+
+function VersionsTable({ person, programs }) {
+  const rows = programs
+    .filter((r) => r.assigned_to === person.id)
+    .slice()
+    .sort((a, b) => {
+      const ka = a.effective_from === "-infinity" ? "" : String(a.effective_from);
+      const kb = b.effective_from === "-infinity" ? "" : String(b.effective_from);
+      return ka < kb ? 1 : ka > kb ? -1 : 0;
+    });
+  const inForce = resolveForDate(rows.filter((r) => r.definition), new Date());
+  if (!rows.length) {
+    return (
+      <Notice tone="warn" title="No programme versions">
+        No program row is assigned to {person.name}.
+      </Notice>
+    );
+  }
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-xl border px-4 py-3 overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr style={{ color: T.textMuted }} className="text-[10px] uppercase tracking-wide text-left">
+            <th className="font-normal pb-1">Id</th>
+            <th className="font-normal pb-1">Name</th>
+            <th className="font-normal pb-1">Effective from</th>
+            <th className="font-normal pb-1" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} style={{ borderColor: T.border, color: T.textPrimary }} className="border-t">
+              <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{r.id}</td>
+              <td className="py-1.5 pr-3">{r.name}</td>
+              <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{fromLabel(r.effective_from)}</td>
+              <td className="py-1.5">{inForce && inForce.id === r.id && <Tag tone="good">in force</Tag>}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -973,11 +1237,11 @@ function Exercise({ ex, names }) {
 
 /* ------------------------------- small parts ------------------------------- */
 
-function Shell({ children }) {
+function Shell({ children, wide }) {
   return (
     <div style={{ background: T.bg, fontFamily: FONT_BODY, minHeight: "100vh" }} className="w-full">
       <FontImport />
-      <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>
+      {wide ? <div className="w-full">{children}</div> : <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>}
     </div>
   );
 }
