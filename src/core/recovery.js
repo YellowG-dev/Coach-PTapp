@@ -4,19 +4,21 @@
 //
 // First, what counts as a session. Oura's workout collection is mostly
 // auto-detected daily activity — on one real account, 331 of 385 rows were
-// walking, housework and yardwork, all with source "confirmed". Only
-// "workout_heart_rate" and "manual" are deliberate training. Polar rows have no
-// source field and are all real sessions, so they pass through untouched.
+// walking, housework and yardwork, all with source "confirmed". A workout
+// counts when the client started or entered it ("workout_heart_rate",
+// "manual"), or when Oura detected it, the client accepted it ("confirmed")
+// and it is a real sport: housework, yardwork, stretching and "other" never
+// count, and a walk counts from 30 minutes. Autodetected rows the client has
+// not accepted never count. Polar rows have no source field and are all real
+// sessions. The rule (set by John, 29 Sep 2026) lives in cardio.js, a
+// byte-identical copy of the clients' file — one rule, not two.
 //
 // Second, nothing here invents a number. A missing night is null and renders as
 // a dash; it is never a zero, and never interpolated from its neighbours. A
 // coach reading a 0 h night would draw a conclusion the data does not support.
 
-export function isRealSession(w) {
-  if (!w) return false;
-  if (w.vendor === "oura") return w.source === "workout_heart_rate" || w.source === "manual";
-  return true;
-}
+import { isRealSession } from "./cardio.js";
+export { isRealSession };
 
 /**
  * Which row wins when one day carries more than one.
