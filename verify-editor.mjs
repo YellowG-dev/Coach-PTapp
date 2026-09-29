@@ -8,7 +8,7 @@ import {
   startDraft, setBlockField, setExerciseField, listEditable,
   catalogue, takenExerciseIds, addExistingExercise, addNewExercise, removeExercise, moveExercise,
   addBlock, retireBlock, restoreBlock, setBlockCardio, setHrZones, standardHrZones, setCardioTypes,
-  setScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions,
+  setScheduleCell, moveScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions,
   saveDraft, loadDraft, clearDraft, draftStatus,
 } from "./src/core/editor.js";
 import { collectLoggedIds } from "./src/core/validate-program.js";
@@ -511,6 +511,59 @@ check("a Ville draft moving run/long Saturday → Sunday in both weeks passes pr
   const lines = diffDefinitions(ville, d);
   assert.deepStrictEqual(lines, ["Schedule A · run long: Sat → Sun", "Schedule B · run long: Sat → Sun"]);
   const r = pf(ID.ville, "Ville", d);
+  assert.deepStrictEqual(r.blocking, []);
+  assert.strictEqual(r.ok, true);
+});
+
+// ---- R2: moveScheduleCell ----
+check("moveScheduleCell: move to an empty day clears the source and fills the target", () => {
+  const out = moveScheduleCell(ville, "A", "6", "0", "run");
+  assert.strictEqual(out.schedule.A["6"].run, null);
+  assert.strictEqual(out.schedule.A["0"].run, "long");
+  assert.deepStrictEqual(out.schedule.B, ville.schedule.B, "other week untouched");
+  assert.strictEqual(ville.schedule.A["6"].run, "long", "input not mutated");
+});
+check("moveScheduleCell: an occupied target swaps", () => {
+  const out = moveScheduleCell(ville, "A", "6", "2", "run"); // Sat long ↔ Tue easy
+  assert.strictEqual(out.schedule.A["2"].run, "long");
+  assert.strictEqual(out.schedule.A["6"].run, "easy");
+  const lines = diffDefinitions(ville, out);
+  assert.strictEqual(lines.length, 2);
+  assert.ok(lines.includes("Schedule A · Tue: run easy → long"), lines.join("|"));
+  assert.ok(lines.includes("Schedule A · Sat: run long → easy"), lines.join("|"));
+});
+check("moveScheduleCell: the same day is a no-op", () => {
+  assert.deepStrictEqual(moveScheduleCell(ville, "A", "6", "6", "run"), ville);
+  assert.deepStrictEqual(diffDefinitions(ville, moveScheduleCell(ville, "A", "6", "6", "run")), []);
+});
+check("moveScheduleCell: an empty source throws; bad week/day/slot throw", () => {
+  assert.throws(() => moveScheduleCell(ville, "A", "0", "1", "run"), /Nothing to move/);
+  assert.throws(() => moveScheduleCell(ville, "C", "6", "0", "run"));
+  assert.throws(() => moveScheduleCell(ville, "A", "6", "9", "run"));
+  assert.throws(() => moveScheduleCell(ville, "A", "6", "0", "swim"));
+});
+check("moveScheduleCell: a retired block already in the schedule can be moved; the library cannot place it", () => {
+  const retired = retireBlock(ville, "run", "long");
+  assert.throws(() => setScheduleCell(retired, "A", "0", "run", "long"));
+  const out = moveScheduleCell(retired, "A", "6", "0", "run");
+  assert.strictEqual(out.schedule.A["0"].run, "long");
+  assert.strictEqual(out.schedule.A["6"].run, null);
+  const swapped = moveScheduleCell(retired, "A", "2", "6", "run"); // live easy onto retired long's day: long goes to Tue
+  assert.strictEqual(swapped.schedule.A["6"].run, "easy");
+  assert.strictEqual(swapped.schedule.A["2"].run, "long");
+});
+check("moveScheduleCell: Ville Block 2 (long run Sat → Sun, both weeks) equals the setScheduleCell scenario, same diff, passes preflight", () => {
+  let viaSet = ville, viaMove = ville;
+  for (const w of ["A", "B"]) {
+    viaSet = setScheduleCell(viaSet, w, "6", "run", null);
+    viaSet = setScheduleCell(viaSet, w, "0", "run", "long");
+    viaMove = moveScheduleCell(viaMove, w, "6", "0", "run");
+  }
+  assert.deepStrictEqual(viaMove, viaSet);
+  const lines = diffDefinitions(ville, viaMove);
+  assert.deepStrictEqual(lines, diffDefinitions(ville, viaSet));
+  assert.deepStrictEqual(lines, ["Schedule A · run long: Sat → Sun", "Schedule B · run long: Sat → Sun"]);
+  const r = pf(ID.ville, "Ville", viaMove);
   assert.deepStrictEqual(r.blocking, []);
   assert.strictEqual(r.ok, true);
 });
