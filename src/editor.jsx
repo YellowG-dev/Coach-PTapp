@@ -179,7 +179,7 @@ function ScheduleEditor({ draft, when, apply }) {
     return list;
   };
   return (
-    <div style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2 mt-4">
+    <div style={{ borderColor: T.borderStrong }} className="rounded-lg border px-3 py-2 mt-4">
       <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">Weekly schedule</p>
       <div className="flex flex-wrap items-center gap-2 mt-1">
         {["A", "B"].map((w) => (
@@ -193,8 +193,8 @@ function ScheduleEditor({ draft, when, apply }) {
             Week {w}
           </button>
         ))}
-        <Btn onClick={() => apply((d) => copyWeek(d, "A", "B"))}>Copy A → B</Btn>
-        <Btn onClick={() => apply((d) => copyWeek(d, "B", "A"))}>Copy B → A</Btn>
+        <Btn title={COPY_TITLE("A", "B")} onClick={() => apply((d) => copyWeek(d, "A", "B"))}>Make Week B same as A</Btn>
+        <Btn title={COPY_TITLE("B", "A")} onClick={() => apply((d) => copyWeek(d, "B", "A"))}>Make Week A same as B</Btn>
       </div>
       <p style={{ color: T.textMuted }} className="text-[11px] mt-1">
         {auto ? `Week of ${when} is Week ${auto}.` : "Pick a valid effective date to see which week it falls in."} The client's own
@@ -252,11 +252,45 @@ function mondayOf(d) {
   return out;
 }
 
-const cardStyle = (color, selected) => ({
-  background: T.card,
-  borderColor: selected ? T.accent : T.border,
+// Every section is a box: strong edge, 12 px radius, the darker panel colour.
+const PANEL = { background: T.panel, border: `1px solid ${T.borderStrong}`, borderRadius: 12 };
+const PANEL_CLASS = "px-2.5 py-2";
+
+// The slot colour at `a` over the card colour, e.g. 8 % for a movable card.
+function tint(color, a = 0.08) {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(color));
+  if (!m) return T.card;
+  const bg = /^#([0-9a-f]{6})$/i.exec(T.card)[1];
+  const ch = (h, i) => parseInt(h.slice(i, i + 2), 16);
+  const mix = [0, 2, 4].map((i) => Math.round(ch(m[1], i) * a + ch(bg, i) * (1 - a)));
+  return `rgb(${mix.join(",")})`;
+}
+
+// Movable card: strong edge, 3 px slot-colour bar, slot tint. Selected = amber
+// edge, changed in the draft = teal edge (A3). The hover edge is the slot
+// colour, so the edge colour goes through a variable rather than inline
+// `borderColor`, which a hover class could not beat.
+const cardStyle = (color, selected, changed) => ({
+  background: tint(color),
+  "--slot": color,
+  "--edge": selected ? T.accent : changed ? T.accentAlt : T.borderStrong,
   borderLeft: `3px solid ${color}`,
 });
+const CARD_CLASS =
+  "border [border-color:var(--edge)] hover:[border-color:var(--slot)] hover:-translate-y-px transition-transform cursor-grab";
+const SELECTED_HOVER = "hover:[border-color:var(--edge)]";
+
+// A block differs from the version being edited (new, or any field changed).
+const blockChanged = (baseDef, draft, slot, key) => {
+  const at = (d) => d && d.blocks && d.blocks[slot] && d.blocks[slot][key];
+  return JSON.stringify(at(baseDef) || null) !== JSON.stringify(at(draft) || null);
+};
+const cellChanged = (baseDef, draft, week, dow, slot) => {
+  const at = (d) => (d && d.schedule && d.schedule[week] && d.schedule[week][dow] && d.schedule[week][dow][slot]) || null;
+  return at(baseDef) !== at(draft);
+};
+
+const COPY_TITLE = (from, to) => `Copies every day of Week ${from} onto Week ${to}. Week ${to}'s current days are replaced.`;
 
 /** One meta line for a library card. */
 function blockMeta(slot, b) {
@@ -269,9 +303,9 @@ function blockMeta(slot, b) {
 }
 
 function Library({ ed, sel, onSelect, onDragStart, onDragEnd }) {
-  const { draft, tree, apply } = ed;
+  const { draft, tree, apply, baseDef } = ed;
   return (
-    <div data-part="library" className="min-w-0">
+    <div data-part="library" style={PANEL} className={"min-w-0 " + PANEL_CLASS}>
       <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">Session library</p>
       {tree.map(({ slot, blocks }) => {
         const meta = slotMetaFor(draft, slot);
@@ -281,24 +315,26 @@ function Library({ ed, sel, onSelect, onDragStart, onDragEnd }) {
           <div key={slot} className="mt-3">
             <div className="flex items-center gap-2">
               <span aria-hidden="true" style={{ background: meta.color }} className="inline-block w-1 h-4 rounded-sm" />
-              <p style={{ color: T.textPrimary }} className="text-xs font-semibold">{meta.label}</p>
+              <p style={{ color: meta.color }} className="text-xs font-semibold">{meta.label}</p>
             </div>
             {live.map((b) => {
               const selected = sel && sel.slot === slot && sel.key === b.key;
+              const name = b.optionLabel || b.key;
               return (
                 <div
                   key={b.key}
                   data-card="library"
                   draggable
+                  title={`${name} · ${b.label} · ${blockMeta(slot, b)}`}
                   onDragStart={(e) => onDragStart(e, { kind: "lib", slot, key: b.key })}
                   onDragEnd={onDragEnd}
                   onClick={() => onSelect({ slot, key: b.key })}
-                  style={cardStyle(meta.color, selected)}
-                  className="rounded-lg border px-2.5 py-1.5 mt-1.5 cursor-grab"
+                  style={cardStyle(meta.color, selected, blockChanged(baseDef, draft, slot, b.key))}
+                  className={"rounded-lg px-2.5 py-1.5 mt-1.5 " + CARD_CLASS + (selected ? " " + SELECTED_HOVER : "")}
                 >
-                  <p style={{ color: T.textPrimary }} className="text-xs font-semibold truncate">{b.optionLabel || b.key}</p>
+                  <p style={{ color: T.textPrimary }} className="text-xs font-semibold truncate">{name}</p>
                   <p style={{ color: T.textSecondary }} className="text-[11px] truncate">{b.label}</p>
-                  <p style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="text-[10px]">{blockMeta(slot, b)}</p>
+                  <p style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="text-[10px] truncate">{blockMeta(slot, b)}</p>
                 </div>
               );
             })}
@@ -308,10 +344,10 @@ function Library({ ed, sel, onSelect, onDragStart, onDragEnd }) {
                 {retired.map((b) => (
                   <div
                     key={b.key}
-                    style={{ ...cardStyle(meta.color, false), opacity: 0.6 }}
-                    className="rounded-lg border px-2.5 py-1.5 mt-1.5"
+                    style={{ background: T.card, border: `1px solid ${T.borderStrong}`, borderLeft: `3px solid ${meta.color}`, opacity: 0.6 }}
+                    className="rounded-lg px-2.5 py-1.5 mt-1.5"
                   >
-                    <p style={{ color: T.textPrimary }} className="text-xs">{b.key} · retired</p>
+                    <p style={{ color: T.textPrimary }} className="text-xs truncate">{b.key} · retired</p>
                     <p style={{ color: T.textMuted }} className="text-[11px]">
                       {b.label} · {b.exercises.length} exercise{b.exercises.length === 1 ? "" : "s"}. Kept so history resolves.
                     </p>
@@ -364,7 +400,7 @@ function NoteCell({ value, onChange }) {
 }
 
 function WeekBoard({ ed, week, sel, onSelect, drag, onDragStart, onDragEnd }) {
-  const { draft, apply, when } = ed;
+  const { draft, apply, when, baseDef } = ed;
   const slots = draft.slots || [];
   const [over, setOver] = useState(null);
   let auto = null;
@@ -390,8 +426,8 @@ function WeekBoard({ ed, week, sel, onSelect, drag, onDragStart, onDragEnd }) {
     else if (p.kind === "day") apply((d) => moveScheduleCell(d, week, p.from, dow, p.slot));
   };
   return (
-    <div className="overflow-x-auto">
-      <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(7, minmax(6.5rem, 1fr))", minWidth: "46rem" }}>
+    <div className="overflow-x-auto xl:overflow-visible">
+      <div className="grid gap-2 min-w-[46rem] xl:min-w-0" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
         {DOW_ORDER.map((dow) => {
           const day = (draft.schedule && draft.schedule[week] && draft.schedule[week][dow]) || {};
           const date = dateOf(dow);
@@ -404,10 +440,14 @@ function WeekBoard({ ed, week, sel, onSelect, drag, onDragStart, onDragEnd }) {
               onDragOver={(e) => { e.preventDefault(); if (over !== dow) setOver(dow); }}
               onDragLeave={() => setOver((o) => (o === dow ? null : o))}
               onDrop={(e) => drop(e, dow)}
-              style={{ borderColor: hot ? T.accent : T.border, background: hot ? T.bg : "transparent", borderStyle: drag ? "dashed" : "solid" }}
-              className="rounded-lg border px-1.5 py-2 min-h-[9rem] flex flex-col min-w-0"
+              style={{
+                borderColor: hot ? T.accent : T.borderStrong,
+                borderStyle: hot ? "dashed" : "solid",
+                background: hot ? T.bg : T.panel,
+              }}
+              className="rounded-xl border px-1.5 py-2 min-h-[9rem] flex flex-col min-w-0"
             >
-              <p style={{ color: T.textPrimary }} className="text-[11px] font-semibold">
+              <p style={{ color: T.textPrimary }} className="text-[11px] font-semibold truncate">
                 {DOW_NAMES[dow]}
                 {date && <span style={{ color: T.textMuted }} className="font-normal"> · {dayLabel(date)}</span>}
               </p>
@@ -419,32 +459,35 @@ function WeekBoard({ ed, week, sel, onSelect, drag, onDragStart, onDragEnd }) {
                   const opt = ((draft.slotOptions && draft.slotOptions[slot]) || []).find((o) => o && o.value === key);
                   const blk = draft.blocks && draft.blocks[slot] && draft.blocks[slot][key];
                   const selected = sel && sel.slot === slot && sel.key === key;
+                  const label = opt ? opt.label : `${(blk && blk.label) || key} (retired)`;
+                  const changed = blockChanged(baseDef, draft, slot, key) || cellChanged(baseDef, draft, week, dow, slot);
                   return (
                     <div
                       key={slot}
                       data-card="day"
+                      title={`${label} · ${meta.label}`}
                       draggable
                       onDragStart={(e) => onDragStart(e, { kind: "day", week, from: dow, slot, key })}
                       onDragEnd={onDragEnd}
                       onClick={() => onSelect({ slot, key })}
-                      style={{ ...cardStyle(meta.color, selected), opacity: opt ? 1 : 0.6 }}
-                      className="rounded-md border px-2 py-1 mt-1.5 cursor-grab"
+                      style={{ ...cardStyle(meta.color, selected, changed), opacity: opt ? 1 : 0.6 }}
+                      className={"rounded-md px-2 py-1 mt-1.5 " + CARD_CLASS + (selected ? " " + SELECTED_HOVER : "")}
                     >
                       <div className="flex items-start justify-between gap-1">
-                        <p style={{ color: T.textPrimary }} className="text-[11px] font-semibold leading-tight break-words">
-                          {opt ? opt.label : `${(blk && blk.label) || key} (retired)`}
+                        <p style={{ color: T.textPrimary }} className="text-[11px] font-semibold leading-tight truncate min-w-0">
+                          {label}
                         </p>
                         <button
                           type="button"
                           aria-label={`Remove ${slot} from ${DOW_NAMES[dow]}`}
                           onClick={(e) => { e.stopPropagation(); apply((d) => setScheduleCell(d, week, dow, slot, null)); }}
                           style={{ color: T.textMuted }}
-                          className="text-xs leading-none px-0.5 focus:outline-none focus-visible:ring-2"
+                          className="shrink-0 text-xs leading-none px-0.5 focus:outline-none focus-visible:ring-2"
                         >
                           ×
                         </button>
                       </div>
-                      <p style={{ color: T.textMuted }} className="text-[10px]">{meta.label}</p>
+                      <p style={{ color: meta.color }} className="text-[10px] truncate">{meta.label}</p>
                     </div>
                   );
                 })}
@@ -475,7 +518,7 @@ function BlockEditor({ ed, slot, b, blocks }) {
   };
   const setCardio = (patch) => apply((d) => setBlockCardio(d, slot, b.key, patch));
   return (
-    <div data-part="block" style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2 mt-4">
+    <div data-part="block" style={PANEL} className={"mt-4 " + PANEL_CLASS}>
       <div className="flex items-center justify-between gap-2">
         <p style={{ color: T.textPrimary }} className="text-xs font-semibold">
           {slot} · {b.key}{b.retired ? " · retired (read-only)" : ""}
@@ -613,50 +656,50 @@ function BlockEditor({ ed, slot, b, blocks }) {
 
 function Section({ title, children }) {
   return (
-    <details style={{ borderColor: T.border }} className="border-t mt-3 pt-2">
+    <details data-part="section" style={PANEL} className="mt-3 px-2.5 py-2">
       <summary style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide cursor-pointer">{title}</summary>
       {children}
     </details>
   );
 }
 
-function PublishPanel({ ed, week }) {
+function PublishPanel({ ed }) {
   const { draft, apply, when, setWhen, changes, hasBlank, runCheck, result, busy, doPublish, published, notice } = ed;
   let auto = null;
   try { auto = weekFor(when); } catch (e) { /* mid-edit */ }
   return (
-    <div data-part="publish" className="min-w-0">
+    <div data-part="publish" style={PANEL} className={"min-w-0 self-start " + PANEL_CLASS}>
       <label style={{ color: T.textSecondary }} className="text-[11px] block mb-1">Effective from</label>
       <input
         type="date"
         value={when}
         onChange={(e) => setWhen(e.target.value)}
         style={{ fontFamily: FONT_MONO, color: T.textPrimary, background: T.bg, borderColor: T.border }}
-        className="text-xs px-2 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+        className="w-full min-w-0 text-xs px-2 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
       />
       <p style={{ color: T.textMuted }} className="text-[11px] mt-1">
         {auto ? `Falls in Week ${auto}.` : "Pick a valid effective date to see which week it falls in."}
       </p>
 
-      <div style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2 mt-3">
+      <div style={{ borderColor: T.borderStrong }} className="rounded-lg border px-2 py-2 mt-3">
         <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">
           Changes{changes.length ? ` · ${changes.length}` : ""}
         </p>
         {changes.length === 0 ? (
           <p style={{ color: T.textMuted }} className="text-[11px] mt-1">No changes</p>
         ) : (
-          <ul style={{ color: T.textPrimary }} className="text-[11px] mt-1 leading-relaxed list-disc pl-4">
+          <ul style={{ color: T.textPrimary }} className="text-[11px] mt-1 leading-relaxed list-disc pl-3 break-words">
             {changes.map((c, i) => <li key={i}>{c}</li>)}
           </ul>
         )}
       </div>
 
-      <div className="flex gap-2 mt-2">
+      <div className="flex flex-col gap-2 mt-2">
         <button
           onClick={runCheck}
           disabled={hasBlank || changes.length === 0}
           style={{ borderColor: T.border, color: hasBlank || changes.length === 0 ? T.textMuted : T.textPrimary }}
-          className="text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
+          className="w-full text-xs font-semibold px-3 py-1.5 rounded-lg border focus:outline-none focus-visible:ring-2"
         >
           Check
         </button>
@@ -665,7 +708,7 @@ function PublishPanel({ ed, week }) {
             onClick={doPublish}
             disabled={busy}
             style={{ background: T.good, color: T.onAccent }}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none focus-visible:ring-2"
+            className="w-full text-xs font-semibold px-3 py-1.5 rounded-lg focus:outline-none focus-visible:ring-2"
           >
             {busy ? "Publishing…" : "Publish"}
           </button>
@@ -741,18 +784,6 @@ function PublishPanel({ ed, week }) {
           }
         />
       </Section>
-
-      <Section title="Day notes">
-        <p style={{ color: T.textMuted }} className="text-[11px] mt-0.5">Shown on the client's day. Editing Week {week}.</p>
-        {DOW_ORDER.map((dow) => {
-          const day = (draft.schedule && draft.schedule[week] && draft.schedule[week][dow]) || {};
-          return (
-            <div key={dow} className="mt-1">
-              <Field label={DOW_NAMES[dow]} full value={day.note || ""} onChange={(v) => apply((d) => setDayNote(d, week, dow, v))} />
-            </div>
-          );
-        })}
-      </Section>
     </div>
   );
 }
@@ -795,8 +826,8 @@ function Workspace({ ed }) {
   const hh = (n) => String(n).padStart(2, "0");
 
   return (
-    <div className="mt-4">
-      <div className="flex flex-wrap items-center gap-2 mb-3">
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2 mb-2">
         <p style={{ color: T.textPrimary }} className="text-xs font-semibold">
           {current.baseName}
           <span style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="font-normal ml-2">
@@ -815,15 +846,15 @@ function Workspace({ ed }) {
             {effWeekLabel(w)}
           </button>
         ))}
-        <Btn onClick={() => apply((d) => copyWeek(d, "A", "B"))}>Copy A → B</Btn>
-        <Btn onClick={() => apply((d) => copyWeek(d, "B", "A"))}>Copy B → A</Btn>
+        <Btn title={COPY_TITLE("A", "B")} onClick={() => apply((d) => copyWeek(d, "A", "B"))}>Make Week B same as A</Btn>
+        <Btn title={COPY_TITLE("B", "A")} onClick={() => apply((d) => copyWeek(d, "B", "A"))}>Make Week A same as B</Btn>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[260px_minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[200px_minmax(0,1fr)_170px]">
         <Library ed={ed} sel={sel} onSelect={setSel} onDragStart={onDragStart} onDragEnd={onDragEnd} />
 
         <div className="min-w-0">
-          <div style={{ borderColor: T.border }} className="rounded-lg border px-3 py-2">
+          <div data-part="board" style={PANEL} className={PANEL_CLASS}>
             <div className="flex items-center gap-2 mb-2">
               <p style={{ color: T.textSecondary }} className="text-[11px] font-bold uppercase tracking-wide">Week board</p>
               <span className="flex-1" />
@@ -844,7 +875,7 @@ function Workspace({ ed }) {
           {selBlock && <BlockEditor key={sel.slot + "/" + sel.key} ed={ed} slot={sel.slot} b={selBlock} blocks={selGroup.blocks} />}
         </div>
 
-        <PublishPanel ed={ed} week={week} />
+        <PublishPanel ed={ed} />
       </div>
     </div>
   );
@@ -869,6 +900,7 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
   const [notice, setNotice] = useState(null); // an edit the model refused
   const [pending, setPending] = useState(null); // inline confirmation awaiting an answer
   const [savedAt, setSavedAt] = useState(null); // when the working draft was last written to storage
+  const [showInfo, setShowInfo] = useState(false); // the long intro, behind the ⓘ toggle
 
   // Derived on open so a collapsed panel costs nothing, and so the render
   // harness (defaultOpen) sees the same content a click would produce.
@@ -969,12 +1001,12 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
 
   const ed = {
     draft, tree, cat, when, apply, applyRequired, blanks, setBlanks, pending, setPending, notice, changes, hasBlank,
-    runCheck, result, busy, doPublish, published, takenIds, current, savedAt, person, defaultView, defaultSelected,
+    runCheck, result, busy, doPublish, published, takenIds, current, savedAt, person, defaultView, defaultSelected, baseDef,
     setWhen: (v) => { setResult(null); setPublished(null); setWhen(v); },
   };
 
   return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mt-4">
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-3 py-2 mt-2">
       <div className="flex items-baseline justify-between gap-3">
         <p style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
           Edit programme · {person.name}
@@ -992,12 +1024,28 @@ export function ProgrammeEditor({ person, programs, logRows, ownerId, onPublishe
         <p style={{ color: T.warn }} className="text-[11px] mt-2">{current.reason}</p>
       ) : (
         <>
-          <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
-            Based on: {current.baseName} (in force from {String(current.baseFrom)}). Edits the weekly schedule, blocks, exercises, cardio
-            targets and heart-rate zones; testing and daily sections carry over unchanged. Exercise IDs
-            cannot be changed, and history is kept when an exercise is removed or a block retired.{" "}
-            <strong style={{ color: T.textSecondary }}>Publishing changes {person.name}'s app.</strong>
+          <p style={{ color: T.textMuted }} className="text-[11px] mt-0.5 leading-snug">
+            Based on: {current.baseName} (in force from {String(current.baseFrom)}).{" "}
+            <strong style={{ color: T.textSecondary }}>Publishing changes {person.name}'s app.</strong>{" "}
+            <button
+              type="button"
+              onClick={() => setShowInfo((v) => !v)}
+              aria-expanded={showInfo}
+              aria-label="What can be edited here"
+              title="What can be edited here"
+              style={{ color: T.textSecondary }}
+              className="font-semibold focus:outline-none focus-visible:underline"
+            >
+              ⓘ
+            </button>
           </p>
+          {showInfo && (
+            <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
+              Edits the weekly schedule, blocks, exercises, cardio targets and heart-rate zones; testing and daily sections
+              carry over unchanged. Exercise IDs cannot be changed, and history is kept when an exercise is removed or a
+              block retired.
+            </p>
+          )}
 
           {promptSaved ? (
             <div style={{ borderColor: T.warn }} className="rounded-lg border px-3 py-2 mt-3">
