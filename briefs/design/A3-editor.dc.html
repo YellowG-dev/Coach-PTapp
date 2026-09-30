@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Programme editor, merged</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#10131A;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#EEF0F3}
+a{color:#E3A23C;text-decoration:none}a:hover{color:#F0BB63}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; background: #10131A; color: #EEF0F3; font-family: 'IBM Plex Sans', system-ui, sans-serif; overflow: hidden;">
+
+  <nav aria-label="Clients" style="width: 64px; flex-shrink: 0; background: #151922; border-right: 1px solid #2A3140; display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 18px;">
+    <sc-for list="{{clients}}" as="c" hint-placeholder-count="4">
+      <a href="Main.dc.html" aria-label="{{c.name}}" style="{{c.style}}">{{c.initial}}</a>
+    </sc-for>
+  </nav>
+
+  <main style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header style="height: 64px; flex-shrink: 0; padding: 0 24px; border-bottom: 1px solid #2A3140; display: flex; align-items: center; gap: 18px;">
+      <div style="display: flex; flex-direction: column; gap: 1px;">
+        <div style="font-size: 12px; color: #8891A3;"><a href="Main.dc.html" style="color: #8891A3;">Ville</a> / Programme</div>
+        <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 20px;">Block 2 draft</h1>
+      </div>
+      <span style="font-size: 12px; color: #8891A3; font-family: 'IBM Plex Mono', monospace;">based on ville-2026-09 · saved 12:41</span>
+      <div role="tablist" style="margin-left: auto; display: flex; background: #1A1F29; border: 1px solid #2A3140; border-radius: 8px; padding: 2px;">
+        <button type="button" role="tab" aria-selected="false" style="background: transparent; color: #8891A3; border: 0; border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600;">Week A</button>
+        <button type="button" role="tab" aria-selected="true" style="background: #2A3140; color: #EEF0F3; border: 0; border-radius: 6px; padding: 6px 14px; font: inherit; font-size: 12px; font-weight: 600;">Week B · 16 Nov</button>
+      </div>
+      <button type="button" style="background: transparent; border: 0; color: #E3A23C; font: inherit; font-size: 12px; font-weight: 600;">Copy B → A</button>
+    </header>
+
+    <div style="flex-grow: 1; display: flex; min-height: 0;">
+      <aside aria-label="Session library" style="width: 232px; flex-shrink: 0; border-right: 1px solid #2A3140; padding: 14px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+        <span style="font-size: 11px; color: #8891A3;">Drag a session onto a day</span>
+        <sc-for list="{{slots}}" as="s" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8891A3; flex-grow: 1;">{{s.name}}</span>
+              <button type="button" aria-label="Add session to {{s.name}}" style="background: transparent; border: 0; color: #E3A23C; font: inherit; font-size: 12px; font-weight: 600; padding: 2px;">+</button>
+            </div>
+            <sc-for list="{{s.items}}" as="b" hint-placeholder-count="2">
+              <div style="{{b.style}}"><span aria-hidden="true" style="color: #5C6577;">⋮⋮</span><span style="flex-grow: 1;">{{b.label}}</span></div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </aside>
+
+      <section style="flex-grow: 1; min-width: 0; display: flex; flex-direction: column; padding: 14px 18px; gap: 14px;">
+        <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; height: 318px;">
+          <sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+            <div style="{{d.colStyle}}">
+              <div style="display: flex; align-items: baseline; gap: 6px;"><span style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 14px;">{{d.name}}</span><span style="font-size: 11px; color: #8891A3;">{{d.date}}</span></div>
+              <sc-for list="{{d.cards}}" as="c" hint-placeholder-count="2">
+                <div style="{{c.style}}"><span style="font-size: 10px; color: #8891A3; text-transform: uppercase; letter-spacing: 0.05em;">{{c.slot}}</span><span style="font-size: 13px; font-weight: 600;">{{c.label}}</span><span style="font-size: 11px; color: #8891A3;">{{c.meta}}</span></div>
+              </sc-for>
+              <span style="{{d.dropStyle}}">{{d.drop}}</span>
+              <span style="margin-top: auto; font-size: 11px; color: #8891A3; font-style: italic;">{{d.note}}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="flex-grow: 1; min-height: 0; background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 8px; height: 8px; border-radius: 2px; background: #E3A23C;"></span>
+            <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 15px;">Strength · A — Legs</h2>
+            <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8891A3;">Picker label <input value="A — Legs" style="background: #10131A; border: 1px solid #2A3140; border-radius: 6px; padding: 5px 8px; color: #EEF0F3; font: inherit; font-size: 12px; width: 110px;"></label>
+            <div style="margin-left: auto; display: flex; gap: 8px;">
+              <button type="button" style="background: transparent; border: 1px solid #2A3140; color: #EEF0F3; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px;">Add existing exercise</button>
+              <button type="button" style="background: transparent; border: 1px solid #2A3140; color: #EEF0F3; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px;">Add new</button>
+              <button type="button" style="background: transparent; border: 1px solid #2A3140; color: #8891A3; border-radius: 8px; padding: 6px 11px; font: inherit; font-size: 12px;">Retire</button>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 24px minmax(0, 2fr) minmax(0, 1.3fr) 52px minmax(0, 2fr) 110px; gap: 8px; font-size: 11px; color: #8891A3; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 4px;">
+            <span></span><span>Exercise</span><span>Prescription</span><span>Sets</span><span>Coaching note</span><span>ID</span>
+          </div>
+          <sc-for list="{{exercises}}" as="e" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 24px minmax(0, 2fr) minmax(0, 1.3fr) 52px minmax(0, 2fr) 110px; gap: 8px; align-items: center; padding: 5px 4px; border-top: 1px solid #2A3140; font-size: 13px;">
+              <span style="color: #5C6577;" aria-hidden="true">⋮⋮</span>
+              <span style="{{e.nameStyle}}">{{e.name}}</span>
+              <span style="background: #10131A; border: 1px solid #2A3140; border-radius: 6px; padding: 5px 8px;">{{e.presc}}</span>
+              <span style="background: #10131A; border: 1px solid #2A3140; border-radius: 6px; padding: 5px 8px; text-align: center;">{{e.sets}}</span>
+              <span style="color: #8891A3; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{e.detail}}</span>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8891A3;">{{e.id}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <aside aria-label="Publish" style="width: 292px; flex-shrink: 0; border-left: 1px solid #2A3140; padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;">
+        <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 15px;">Changes · 5</h2>
+        <sc-for list="{{changes}}" as="c" hint-placeholder-count="5">
+          <div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 8px; padding: 7px 9px; font-size: 12px; font-family: 'IBM Plex Mono', monospace;">{{c}}</div>
+        </sc-for>
+        <div style="border-top: 1px solid #2A3140; padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #8891A3;">Effective from
+            <input type="date" value="2026-11-16" style="background: #10131A; border: 1px solid #2A3140; border-radius: 8px; padding: 8px 10px; color: #EEF0F3; font: inherit; font-size: 13px;">
+          </label>
+          <button type="button" style="background: transparent; border: 1px solid #2A3140; color: #EEF0F3; border-radius: 8px; padding: 10px; font: inherit; font-size: 13px; font-weight: 600;">Check</button>
+          <button type="button" style="background: #E3A23C; color: #14171C; border: 0; border-radius: 8px; padding: 11px; font: inherit; font-size: 14px; font-weight: 600;">Publish Block 2</button>
+          <span style="font-size: 11px; color: #8891A3;">Forward-only. Past days keep Block 1.</span>
+        </div>
+        <div style="margin-top: auto; border-top: 1px solid #2A3140; padding-top: 12px; display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+          <a href="#">Heart-rate zones · PK1 / PK2 / VK</a>
+          <a href="#">Extra cardio types</a>
+          <a href="#">Day notes</a>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const col = { Strength: '#E3A23C', Run: '#4CB6C4', Bike: '#7FB88F', Yoga: '#C97388' };
+    const av = (on) => 'width:40px;height:40px;border-radius:20px;display:flex;align-items:center;justify-content:center;font-family:Space Grotesk,sans-serif;font-weight:700;font-size:14px;color:#EEF0F3;background:' + (on ? '#3A3222;box-shadow:0 0 0 2px #E3A23C;' : '#2A3140;');
+    const clients = [['Ville', 'V', true], ['Juha', 'J'], ['Henna', 'H'], ['Joonatan', 'J']].map(([name, initial, on]) => ({ name, initial, style: av(on) }));
+    const item = (slot, label, dragging) => ({ label, style: 'display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:8px;font-size:12px;background:#1A1F29;border:1px solid ' + (dragging ? '#E3A23C' : '#2A3140') + ';box-shadow:inset 3px 0 0 ' + col[slot] + ';' + (dragging ? 'opacity:0.6;' : '') });
+    const slots = [
+      { name: 'Strength', items: [item('Strength', 'A — Legs'), item('Strength', 'B — Full body'), item('Strength', 'C — Upper + core'), item('Strength', 'No-Gym')] },
+      { name: 'Run', items: [item('Run', 'Easy (PK)'), item('Run', 'Long (PK)'), item('Run', 'Tempo · new', true)] },
+      { name: 'Bike', items: [item('Bike', 'Easy'), item('Bike', 'Tempo')] },
+      { name: 'Yoga', items: [item('Yoga', 'Session')] },
+    ];
+    const card = (slot, label, meta, sel, changed) => ({ slot, label, meta, style: 'display:flex;flex-direction:column;gap:1px;padding:7px 8px;border-radius:8px;background:#1A1F29;border:1px solid ' + (sel ? '#E3A23C' : changed ? '#4CB6C4' : '#2A3140') + ';box-shadow:inset 3px 0 0 ' + col[slot] + ';' });
+    const colStyle = (drop) => 'background:#151922;border:1px ' + (drop ? 'dashed #E3A23C' : 'solid #2A3140') + ';border-radius:12px;padding:9px;display:flex;flex-direction:column;gap:7px;';
+    const days = [
+      { name: 'Mon', date: '16 Nov', cards: [card('Strength', 'A — Legs', '5 exercises', true)] },
+      { name: 'Tue', date: '17 Nov', cards: [card('Run', 'Easy (PK)', '45 min · PK1'), card('Yoga', 'Session', '60 min')] },
+      { name: 'Wed', date: '18 Nov', cards: [], drop: 'Drop Tempo here', dropOn: true },
+      { name: 'Thu', date: '19 Nov', cards: [card('Strength', 'B — Full body', '6 exercises')] },
+      { name: 'Fri', date: '20 Nov', cards: [card('Strength', 'C — Upper + core', '5 exercises')] },
+      { name: 'Sat', date: '21 Nov', cards: [card('Bike', 'Easy', 'PK1 · fixed bpm', false, true)] },
+      { name: 'Sun', date: '22 Nov', cards: [card('Run', 'Long (PK)', '120 min · PK1–PK2', false, true)], note: 'PK1 walk if legs heavy' },
+    ].map((d) => ({ ...d, note: d.note || '', drop: d.drop || '', colStyle: colStyle(d.dropOn), dropStyle: d.dropOn ? 'border:1px dashed #E3A23C;border-radius:8px;padding:14px 6px;text-align:center;font-size:11px;color:#E3A23C;' : 'display:none;' }));
+    const exercises = [
+      { name: 'Bulgarian split squat', presc: '4×6–10/leg', sets: '4', detail: 'Rear foot laces-down on the bench…', id: 'bss' },
+      { name: '[Exercise 2]', presc: '[3×8]', sets: '3', detail: '[Coaching note]', id: '[id]' },
+      { name: '[Exercise 3]', presc: '[3×10]', sets: '3', detail: '[Coaching note]', id: '[id]' },
+      { name: 'Tibialis raise (wall)', presc: '2×15–25', sets: '2', detail: 'Feet further from the wall = harder', id: 'tib-raise' },
+      { name: 'Single-leg calf raise · new', presc: '[3×12/leg]', sets: '3', detail: '[Coaching note]', id: 'single-leg-calf-raise', isNew: true },
+    ].map((e) => ({ ...e, nameStyle: 'font-weight:600;' + (e.isNew ? 'color:#E3A23C;' : '') }));
+    const changes = ['Schedule B · run long: Sat → Sun', 'Schedule B · Sat: bike — → easy', 'Block added: run/tempo "Tempo"', 'Exercise added to strength/a', 'Target run/long: 90 → 120 min'];
+    return { clients, slots, days, exercises, changes };
+  }
+}
+</script>
+</body>
+</html>
