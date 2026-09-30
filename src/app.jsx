@@ -1,7 +1,7 @@
 // Coach-PTapp — dashboard.
 //
 // One client at a time, chosen in the sidebar (top switcher below 1024 px);
-// the client's page is a tab row: Overview, Training log, Recovery, Programme,
+// the client's page is a tab row: Overview, Training log, Progress, Programme,
 // Versions. Client and tab live in the URL hash (#/<personId>/<tab>).
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
@@ -13,12 +13,12 @@ import { ProgrammeEditor } from "./editor.jsx";
 import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
-import { buildRecovery, connectionLabel, fmtSleep, fmtNum } from "./core/recovery.js";
+import { buildRecovery, connectionLabel } from "./core/recovery.js";
 import { Overview } from "./overview.jsx";
 import { buildPersonCtx, needsAttention } from "./core/overview.js";
 import { loadDraft } from "./core/editor.js";
 import { resolveForDate } from "./core/program-schema.js";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import { Progress } from "./progress.jsx";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
 const PAGE = 20; // days rendered before "show earlier"
@@ -26,7 +26,8 @@ const PAGE = 20; // days rendered before "show earlier"
 export const TABS = [
   { id: "overview", label: "Overview" },
   { id: "log", label: "Training log" },
-  { id: "recovery", label: "Recovery" },
+  // The id stays "recovery" so old #/<person>/recovery links still open it.
+  { id: "recovery", label: "Progress" },
   { id: "programme", label: "Programme" },
   { id: "versions", label: "Versions" },
 ];
@@ -209,7 +210,6 @@ export default function CoachApp() {
           roster={roster}
           selectedId={person ? person.id : null}
           onSelect={(id) => goto(id, tab)}
-          programs={data.programs || []}
           dots={dots}
           email={user.email}
         />
@@ -366,20 +366,14 @@ const DOT = {
   paused: { colour: () => T.textMuted, text: "Sharing paused" },
 };
 
-function programmeLabel(programs, person) {
-  const rows = programs.filter((r) => r.assigned_to === person.id && r.definition);
-  const v = resolveForDate(rows, new Date());
-  return v ? v.name : "No programme";
-}
-
-/** 240 px column at >= 1024 px; below that it is the old top switcher. */
-function Sidebar({ roster, selectedId, onSelect, programs, dots, email }) {
+/** Column sized to its longest name (128–200 px) at >= 1024 px; below that it is the old top switcher. */
+function Sidebar({ roster, selectedId, onSelect, dots, email }) {
   return (
     <aside
       style={{ borderColor: T.border, background: T.bg }}
-      className="px-5 py-4 border-b lg:border-b-0 lg:border-r lg:w-60 lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col lg:px-4 lg:py-5"
+      className="px-5 py-4 border-b lg:border-b-0 lg:border-r lg:w-fit lg:min-w-[128px] lg:max-w-[200px] lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col lg:px-2 lg:py-5"
     >
-      <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold lg:mb-4">
+      <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold lg:mb-4 lg:px-2.5">
         Coach
       </h1>
       <nav aria-label="Clients" className="flex gap-2 flex-wrap mt-3 lg:mt-0 lg:block lg:space-y-1 lg:flex-1 lg:overflow-y-auto">
@@ -391,12 +385,13 @@ function Sidebar({ roster, selectedId, onSelect, programs, dots, email }) {
               key={p.id}
               onClick={() => onSelect(p.id)}
               aria-current={active ? "page" : undefined}
+              title={p.name}
               style={{
-                background: active ? T.card : "transparent",
-                borderColor: active ? T.accent : T.border,
+                background: active ? T.rowSelected : "transparent",
+                boxShadow: active ? `inset 2px 0 0 ${T.accent}` : "none",
                 color: T.textPrimary,
               }}
-              className="text-left rounded-lg border px-3 py-2 lg:w-full focus:outline-none focus-visible:ring-2"
+              className="text-left rounded-lg px-2.5 py-2 lg:block lg:w-full focus:outline-none focus-visible:ring-2"
             >
               <span className="flex items-center gap-2">
                 <span
@@ -406,26 +401,20 @@ function Sidebar({ roster, selectedId, onSelect, programs, dots, email }) {
                 />
                 <span className="sr-only">{dot.text}: </span>
                 <span className="text-sm font-semibold truncate">{p.name}</span>
-                {p.isSelf && <span style={{ color: T.textMuted }} className="text-[11px]">(you)</span>}
-              </span>
-              <span style={{ color: T.textMuted }} className="block text-[11px] mt-0.5 truncate">
-                {p.state === "paused" ? "sharing paused" : programmeLabel(programs, p)}
+                {p.isSelf && <span style={{ color: T.textMuted }} className="text-[11px] shrink-0">(you)</span>}
+                {p.state === "paused" && <span style={{ color: T.textMuted }} className="text-[11px] shrink-0">paused</span>}
               </span>
             </button>
           );
         })}
       </nav>
-      <div className="mt-4 lg:mt-3 flex items-center justify-between gap-3 lg:block">
-        <div className="min-w-0">
-          <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[10px]">
-            Coach {COACH_VERSION}
-          </p>
-          <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px] truncate">
-            {email}
-          </p>
-        </div>
+      <div className="mt-4 lg:mt-3 flex items-center justify-between gap-3 lg:block lg:px-0.5">
+        <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[10px]">
+          Coach {COACH_VERSION}
+        </p>
         <button
           onClick={signOut}
+          title={email}
           style={{ borderColor: T.border, color: T.textSecondary }}
           className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border lg:mt-2 lg:w-full focus:outline-none focus-visible:ring-2"
         >
@@ -539,14 +528,9 @@ export function PersonPanel({ tab = "overview", person, days, total, adherence, 
           </>
         ))}
 
-      {tab === "recovery" &&
-        (recovery || (connections || []).length ? (
-          <Recovery recovery={recovery} connections={connections} person={person} />
-        ) : (
-          <Notice tone="quiet" title="No wearable connected">
-            {person.name} has no Oura or Polar connection, so there is no sleep, readiness or heart data to show.
-          </Notice>
-        ))}
+      {tab === "recovery" && ctx && (
+        <Progress key={person.id} ctx={ctx} recovery={recovery} connections={connections} names={names} />
+      )}
 
       {tab === "programme" && (
         <ProgrammeEditor
@@ -780,154 +764,6 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
   );
 }
 
-/* -------------------------------- recovery -------------------------------- */
-
-/**
- * Sleep, readiness and heart data from a connected wearable, next to the
- * adherence numbers — the point being that a poor week with three bad nights
- * behind it is a different conversation from a poor week without them.
- *
- * Nothing here is scored or judged. It reports what the device recorded, with
- * gaps left as gaps: a night the ring missed shows a dash, never a zero.
- */
-export function Recovery({ recovery, connections, person }) {
-  const conns = connections || [];
-  if (!recovery) {
-    if (!conns.length) return null; // nothing connected, nothing to say
-    return (
-      <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
-            Recovery
-          </span>
-          {conns.map((c) => {
-            const l = connectionLabel(c);
-            return (
-              <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
-                {c.vendor} · {l.text}
-              </Tag>
-            );
-          })}
-        </div>
-        <p style={{ color: T.textMuted }} className="text-[11px] mt-2">
-          Connected, but no readings have arrived yet.
-        </p>
-      </div>
-    );
-  }
-
-  const { latest, avg7, avg30, series, sessions30, sessionMinutes30, bySport, nights } = recovery;
-  const hasSeries = series.some((p) => p.readiness != null || p.sleepH != null);
-
-  return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
-      <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
-          Recovery
-        </span>
-        {conns.map((c) => {
-          const l = connectionLabel(c);
-          return (
-            <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
-              {c.vendor} · {l.text}
-            </Tag>
-          );
-        })}
-      </div>
-
-      <div className="flex items-baseline gap-4 flex-wrap">
-        <Figure label={latest ? "Sleep · " + latest.day.slice(5) : "Sleep"} value={fmtSleep(latest?.sleep_minutes)} big />
-        <Figure label="Readiness" value={fmtNum(latest?.readiness)} />
-        <Figure label="Resting HR" value={fmtNum(latest?.resting_hr)} />
-        <Figure label="HRV" value={fmtNum(latest?.hrv)} />
-        <Figure label="Steps" value={latest?.steps != null ? Number(latest.steps).toLocaleString() : "—"} />
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap mt-2.5">
-        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
-          7-day: {fmtSleep(avg7.sleep)} · readiness {fmtNum(avg7.readiness)} · RHR {fmtNum(avg7.rhr)} · HRV{" "}
-          {fmtNum(avg7.hrv)}
-        </span>
-        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
-          30-day: {fmtSleep(avg30.sleep)} · readiness {fmtNum(avg30.readiness)} · RHR {fmtNum(avg30.rhr)}
-        </span>
-      </div>
-
-      {hasSeries && (
-        <div style={{ width: "100%", height: 140 }} className="mt-3">
-          <ResponsiveContainer>
-            <LineChart data={series} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
-              <CartesianGrid stroke={T.border} strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: T.textMuted, fontSize: 10 }}
-                axisLine={{ stroke: T.border }}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                yAxisId="left"
-                domain={[0, 100]}
-                tick={{ fill: T.textMuted, fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                width={30}
-              />
-              <YAxis yAxisId="right" orientation="right" hide domain={[0, 12]} />
-              <Tooltip
-                contentStyle={{
-                  background: T.bg,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 8,
-                  fontFamily: FONT_MONO,
-                  fontSize: 11,
-                }}
-                labelStyle={{ color: T.textSecondary }}
-                formatter={(v, name) => [name === "Sleep (h)" ? `${v} h` : v, name]}
-              />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="readiness"
-                name="Readiness"
-                stroke={T.accent}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="sleepH"
-                name="Sleep (h)"
-                stroke={T.good}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {sessions30 > 0 && (
-        <p style={{ color: T.textSecondary }} className="text-[11px] mt-2">
-          {sessions30} recorded session{sessions30 === 1 ? "" : "s"} in 30 days · {sessionMinutes30} min ·{" "}
-          <span style={{ color: T.textMuted }}>
-            {bySport.map((s) => `${s.sport} ${s.n}`).join(", ")}
-          </span>
-        </p>
-      )}
-
-      <p style={{ color: T.textMuted }} className="text-[10px] mt-2 leading-relaxed">
-        {nights} night{nights === 1 ? "" : "s"} with a sleep reading in the last 120 days. Amber is readiness, green is
-        sleep hours. Missing nights are gaps, not zeroes. Oura's auto-detected walking and housework are stored but not
-        counted as sessions here.
-      </p>
-    </div>
-  );
-}
-
 /* ------------------------------- adherence -------------------------------- */
 
 /**
@@ -1039,10 +875,10 @@ export function DayCard({ day, scored, names }) {
   const label = formatDay(day.day);
 
   return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border overflow-hidden">
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border overflow-hidden max-w-[72rem]">
       <div
         style={{ borderColor: T.border }}
-        className="border-b px-4 py-3 flex items-baseline justify-between gap-3 flex-wrap"
+        className="border-b px-4 py-2 flex items-baseline justify-between gap-3 flex-wrap"
       >
         <div>
           <span style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
@@ -1067,7 +903,7 @@ export function DayCard({ day, scored, names }) {
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-3">
+      <div className="px-4 pt-1 pb-3">
         {sched && !sched.isEmpty && <Schedule sched={sched} />}
 
         {shaped && shaped.exercises.length > 0 && (
@@ -1168,7 +1004,7 @@ export function DayCard({ day, scored, names }) {
 function Schedule({ sched }) {
   return (
     <Group title="Schedule changes">
-      <div className="space-y-1">
+      <div className="space-y-1 max-w-[18rem]">
         {sched.slots.map((s) => (
           <Row
             key={s.slot}
@@ -1248,8 +1084,8 @@ function Shell({ children, wide }) {
 
 function Group({ title, children }) {
   return (
-    <div>
-      <p style={{ color: T.textSecondary }} className="text-[10px] uppercase tracking-wider mb-1.5">
+    <div className="mt-3">
+      <p style={{ color: T.textSecondary }} className="text-[10px] uppercase tracking-wider mb-1">
         {title}
       </p>
       {children}
@@ -1257,11 +1093,14 @@ function Group({ title, children }) {
   );
 }
 
+// Cells stay narrow however wide the screen is, so a label and its value stay
+// close; a wider screen gets more cells per row, not wider ones.
 function Pairs({ items }) {
-  // A lone value in a two-column grid leaves its number stranded mid-row.
-  const cols = items.length > 1 ? "grid-cols-2" : "grid-cols-1";
   return (
-    <div className={`grid ${cols} gap-x-4 gap-y-1`}>
+    <div
+      className="grid gap-x-6 gap-y-1"
+      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(14rem, 18rem))" }}
+    >
       {items.map((i) => (
         <Row key={i.key} left={i.label} right={i.value} />
       ))}
@@ -1269,10 +1108,14 @@ function Pairs({ items }) {
   );
 }
 
+// Label left, value right, joined by a faint dotted leader the eye can follow.
 function Row({ left, right, dim }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 text-xs">
-      <span style={{ color: T.textSecondary }}>{left}</span>
+    <div className="flex items-baseline gap-2 text-xs min-w-0">
+      <span style={{ color: T.textSecondary }} className="shrink-0 max-w-[65%] truncate" title={typeof left === "string" ? left : undefined}>
+        {left}
+      </span>
+      <span style={{ borderBottom: `1px dotted ${T.border}` }} className="flex-1 min-w-[0.5rem] h-0 self-end mb-[3px]" aria-hidden="true" />
       <span style={{ fontFamily: FONT_MONO, color: dim ? T.textMuted : T.textPrimary }} className="shrink-0">
         {right}
       </span>

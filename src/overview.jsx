@@ -49,11 +49,20 @@ function Card({ title, children, className }) {
   );
 }
 
+const RECOVERY_IDS = new Set(["ready", "sleep", "hrv", "rhr", "steps"]);
+
 function MetricBox({ n, personId, ids, catalogue, ctx, onChange }) {
   const id = ids[n];
   const metric = computeMetric(id, ctx);
   const item = catalogue.flatMap((g) => g.items).find((i) => i.id === id);
-  const colour = !metric || metric.value == null ? T.textMuted : metric.tone === "good" ? T.good : metric.tone === "warn" ? T.warn : T.textPrimary;
+  const valueColour = !metric || metric.value == null ? T.textMuted : T.textPrimary;
+  // Note line by tone (A1): good / warn from the metric, Oura-style recovery
+  // items teal, everything else neutral.
+  const noteColour =
+    metric && metric.tone === "good" ? T.good
+    : metric && metric.tone === "warn" ? T.warn
+    : RECOVERY_IDS.has(id) ? T.accentAlt
+    : T.textSecondary;
   return (
     <div style={{ background: T.card, borderColor: T.border }} className="rounded-xl border px-4 py-3 min-w-0">
       <div className="flex items-start justify-between gap-2">
@@ -78,57 +87,83 @@ function MetricBox({ n, personId, ids, catalogue, ctx, onChange }) {
           ))}
         </select>
       </div>
-      <p style={{ fontFamily: FONT_MONO, color: colour }} className="text-3xl font-semibold leading-none mt-3">
+      <p style={{ fontFamily: FONT_MONO, color: valueColour }} className="text-3xl font-semibold leading-none mt-3">
         {metric && metric.value != null ? metric.value : "—"}
       </p>
-      <p style={{ color: T.textMuted }} className="text-[11px] mt-2">
+      <p style={{ color: noteColour }} className="text-[11px] mt-2">
         {metric ? metric.note : "Unknown metric"}
       </p>
     </div>
   );
 }
 
+// Cell state → colours, from the A1 design.
+function dayState(d) {
+  if (d.skip) return "skip";
+  if (d.isToday) return "today";
+  if (!d.isPast) return "plan";
+  if (d.sessions.length > 0 || (d.pct != null && d.pct > 0)) return "done";
+  return "quiet";
+}
+
+const CELL = {
+  done: { bg: T.doneBg, border: `1px solid ${T.doneBorder}`, word: "Done", wordColour: T.good },
+  today: { bg: T.bg, border: `1px solid ${T.accent}`, word: "Today", wordColour: T.accent },
+  plan: { bg: T.bg, border: `1px dashed ${T.borderStrong}`, word: "Planned", wordColour: T.textSecondary },
+  skip: { bg: T.bg, border: `1px solid ${T.border}`, word: "Skip", wordColour: T.textMuted, opacity: 0.75 },
+  quiet: { bg: T.bg, border: `1px solid ${T.border}`, word: null, wordColour: T.textMuted },
+};
+
 function WeekGrid({ ctx }) {
   const week = weekPlan(ctx);
   return (
     <Card title="This week · planned vs done" className="lg:col-span-2">
       <div className="grid grid-cols-7 gap-1.5">
-        {week.map((d) => (
-          <div
-            key={d.key}
-            data-day={d.key}
-            style={{ borderColor: d.isToday ? T.accent : T.border, borderWidth: d.isToday ? 2 : 1 }}
-            className="rounded-lg border px-1.5 py-2 min-w-0 min-h-[96px]"
-          >
-            <p style={{ color: d.isToday ? T.accent : T.textSecondary }} className="text-[10px] uppercase tracking-wide">
-              {d.name} {d.dayOfMonth}
-            </p>
-            {d.skip && (
-              <p style={{ color: T.accentAlt }} className="text-[11px] mt-1">
-                Skip
+        {week.map((d) => {
+          const state = dayState(d);
+          const c = CELL[state];
+          const word = state === "quiet" ? (d.planned.length ? "Not logged" : null) : c.word;
+          return (
+            <div
+              key={d.key}
+              data-day={d.key}
+              data-state={state}
+              style={{ background: c.bg, border: c.border, opacity: c.opacity || 1 }}
+              className="rounded-[10px] px-1.5 py-2 min-w-0 min-h-[96px] flex flex-col"
+            >
+              <p style={{ color: d.isToday ? T.accent : T.textSecondary }} className="text-[10px] uppercase tracking-wide">
+                {d.name} {d.dayOfMonth}
               </p>
-            )}
-            {d.planned.map((p) => (
-              <p key={p} style={{ color: T.textPrimary }} className="text-[11px] mt-1 leading-tight break-words">
-                {p}
-              </p>
-            ))}
-            {d.sessions.map((s, i) => (
-              <p key={i} style={{ color: T.good, fontFamily: FONT_MONO }} className="text-[10px] mt-1 leading-tight break-words">
-                ✓ {s.sport} {s.minutes}′
-              </p>
-            ))}
-            {d.pct != null && (
-              <p style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="text-[10px] mt-1">
-                {pctLabel(d.pct)}
-              </p>
-            )}
-          </div>
-        ))}
+              {d.planned.map((p) => (
+                <p key={p} style={{ color: T.textPrimary }} className="text-[11px] mt-1 leading-tight break-words">
+                  {p}
+                </p>
+              ))}
+              {d.sessions.map((s, i) => (
+                <p key={i} style={{ color: T.good, fontFamily: FONT_MONO }} className="text-[10px] mt-1 leading-tight break-words">
+                  ✓ {s.sport} {s.minutes}′
+                </p>
+              ))}
+              {d.pct != null && (
+                <p style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="text-[10px] mt-1">
+                  {pctLabel(d.pct)}
+                </p>
+              )}
+              {word && (
+                <p style={{ color: c.wordColour }} className="text-[11px] font-semibold mt-auto pt-1">
+                  {word}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </Card>
   );
 }
+
+const ATTENTION_DOT = { conn: T.warn, zones: T.textSecondary, unplanned: T.accentAlt, draft: T.accent, nolog: T.warn };
+const attentionKind = (id) => String(id).split(":")[0];
 
 function Attention({ ctx }) {
   const items = needsAttention(ctx);
@@ -141,8 +176,14 @@ function Attention({ ctx }) {
       ) : (
         <ul className="space-y-1.5">
           {items.map((i) => (
-            <li key={i.id} style={{ color: T.textSecondary, borderColor: T.accent }} className="text-xs border-l-2 pl-2">
-              {i.text}
+            <li key={i.id} style={{ color: T.textSecondary }} className="text-xs flex items-start gap-2">
+              <span
+                aria-hidden="true"
+                data-dot={attentionKind(i.id)}
+                style={{ background: ATTENTION_DOT[attentionKind(i.id)] || T.textSecondary }}
+                className="inline-block w-2.5 h-2.5 rounded-full mt-[3px] shrink-0"
+              />
+              <span>{i.text}</span>
             </li>
           ))}
         </ul>
@@ -150,6 +191,11 @@ function Attention({ ctx }) {
     </Card>
   );
 }
+
+const vendorColour = (v) => {
+  const k = String(v || "").toLowerCase();
+  return k === "polar" ? T.accentAlt : k === "oura" ? T.textSecondary : k === "logged" ? T.good : T.textSecondary;
+};
 
 function Sessions({ ctx }) {
   const list = recentSessions(ctx);
@@ -180,7 +226,7 @@ function Sessions({ ctx }) {
                   <td className="py-1 pr-3">{s.duration}</td>
                   <td className="py-1 pr-3">{s.km}</td>
                   <td className="py-1 pr-3">{s.hr}</td>
-                  <td className="py-1" style={{ color: T.textMuted }}>{s.vendor}</td>
+                  <td className="py-1" style={{ color: vendorColour(s.vendor) }}>{s.vendor}</td>
                 </tr>
               ))}
             </tbody>

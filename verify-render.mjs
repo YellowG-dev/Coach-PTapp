@@ -82,8 +82,8 @@ for(const p of edRoster){
   if(c.length===o.length){console.log("    editor open == collapsed");bad++;}
   if(o===t){console.log("    board view == table view");bad++;}
   if(!c.includes("Edit programme for "+p.name)){console.log("    editor collapsed label missing");bad++;}
-  for(const needle of ["Based on:","Effective from","Check","Add existing","Add new","+ Add block","Retire","Remove","Heart-rate zones","Use standard PK1/PK2/VK","Cardio types","Add cardio type","Day notes"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
-  for(const needle of ["Session library","Week board","Week A","Week B","Copy A → B","Copy B → A","Short label in the client&#x27;s picker","Changes","No changes",">Table<"]) if(!o.includes(needle)){console.log("    editor board missing: "+needle);bad++;}
+  for(const needle of ["Based on:","Effective from","Check","Add existing","Add new","+ Add block","Retire","Remove","Heart-rate zones","Use standard PK1/PK2/VK","Cardio types","Add cardio type"]) if(!o.includes(needle)){console.log("    editor open missing: "+needle);bad++;}
+  for(const needle of ["Session library","Week board","Week A","Week B","Make Week B same as A","Make Week A same as B","Short label in the client&#x27;s picker","Changes","No changes",">Table<"]) if(!o.includes(needle)){console.log("    editor board missing: "+needle);bad++;}
   {
     // board view: seven Monday-first day columns, drop targets
     const order=[...o.matchAll(/data-part="day"/g)].length;
@@ -93,7 +93,7 @@ for(const p of edRoster){
     if(!/data-card="library"/.test(o)){console.log("    library has no cards");bad++;}
     if(!/draggable/.test(o)){console.log("    no draggable cards");bad++;}
   }
-  for(const needle of ["Weekly schedule","Week A","Week B","Copy A → B","Copy B → A",">Board<"]) if(!t.includes(needle)){console.log("    editor table missing: "+needle);bad++;}
+  for(const needle of ["Weekly schedule","Week A","Week B","Make Week B same as A","Make Week A same as B",">Board<"]) if(!t.includes(needle)){console.log("    editor table missing: "+needle);bad++;}
   {
     // table view: the unchanged select grid, 7 columns, Monday first
     const grid=t.slice(t.indexOf("Weekly schedule"));
@@ -103,6 +103,9 @@ for(const p of edRoster){
     const first=grid.indexOf(">Mon<"), last=grid.indexOf(">Sun<");
     if(first<0||last<0||first>last){console.log("    schedule grid not Monday first");bad++;}
   }
+  if(o.includes("Day notes")){console.log("    Day notes section should be gone from the publish panel");bad++;}
+  if(!/Copies every day of Week A onto Week B/.test(o)){console.log("    copy button tooltip missing");bad++;}
+  if(!/data-part="section"/.test(o)){console.log("    collapsible sections not boxed");bad++;}
   if(!/<button[^>]*disabled=""[^>]*>Check<\/button>/.test(o)){console.log("    Check not disabled with no changes");bad++;}
   if(k){
     if(!k.includes("Cardio target")){console.log("    editor open missing: Cardio target");bad++;}
@@ -146,10 +149,30 @@ for(const p of edRoster){
         if((h.match(/<select/g)||[]).length!==4){console.log("    overview should have 4 selects");bad++;}
         if((h.match(/data-day="/g)||[]).length!==7){console.log("    overview week grid should have 7 days");bad++;}
       }
+      if(t.id==="recovery"){
+        for(const needle of ["Progress","Recovery trends","Tracked items","Getting stronger","Consistency","Sessions by sport","No wearable connected"]) if(!h.includes(needle)){console.log("    progress missing: "+needle+" ("+p.name+")");bad++;}
+        if(h.includes('data-chart="recovery"')){console.log("    progress shows recovery charts with no wearable ("+p.name+")");bad++;}
+      }
       if(t.id==="versions"&&!h.includes("Publish a new program version")){console.log("    versions tab missing collapsed publisher ("+p.name+")");bad++;}
       if(t.id==="programme"&&p.id!=="ghost"&&!h.includes("Based on:")){console.log("    programme tab not open by default ("+p.name+")");bad++;}
     }
     console.log(`  shell ${p.name.padEnd(9)} ${lens.join(" ")}`);
+  }
+  {
+    // Progress with wearables: five recovery cards, connection tags, tracked cards for Juha.
+    const wd=[];for(let n=1;n<=35;n++){const d=new Date(2026,8,18-n);const day=[d.getFullYear(),String(d.getMonth()+1).padStart(2,"0"),String(d.getDate()).padStart(2,"0")].join("-");wd.push({user_id:ID.juha,vendor:"oura",day,sleep_minutes:420,readiness:75,resting_hr:50,hrv:55,steps:8000});}
+    const wdata={...data,wearables:{connections:[{user_id:ID.juha,vendor:"oura",status:"connected",last_synced_at:new Date().toISOString()}],days:{[ID.juha]:wd},workouts:{}}};
+    const p={id:ID.juha,name:"Juha",state:"ok"};
+    const names=buildNameMap(programs.filter(r=>r.assigned_to===p.id).map(r=>({definition:r.definition})),ov[p.id]);
+    const rec=buildRecovery(wd,[],p.id);
+    const ctx=buildPersonCtx(wdata,p,{today:new Date(2026,8,18),recovery:rec,adherence:adh2[p.id],names,draft:null});
+    const h=renderToStaticMarkup(React.createElement(PersonPanel,{tab:"recovery",person:p,days:[],total:1,adherence:adh2[p.id],pctByDay:{},recovery:rec,connections:wdata.wearables.connections,names,programs,logRows:shellLogs[p.id],ownerId:p.id,ctx,onPublished:()=>{},onMore:()=>{}}));
+    const n=(h.match(/data-chart="recovery"/g)||[]).length, tr=(h.match(/data-card="tracked"/g)||[]).length;
+    console.log(`  progress Juha with wearables: ${n} recovery cards, ${tr} tracked cards, ${h.length} chars`);
+    if(n!==5){console.log("    expected 5 recovery cards");bad++;}
+    if(tr<1){console.log("    expected tracked cards for Juha");bad++;}
+    if(!h.includes("oura · synced")){console.log("    connection tag missing");bad++;}
+    if(/NaN|undefined|\[object/.test(h)){console.log("    progress leaks NaN/undefined");bad++;}
   }
   const paused=renderToStaticMarkup(React.createElement(PersonPanel,{tab:"overview",person:{id:"x",name:"X",state:"paused"},days:[],total:0,programs:[],logRows:[],onPublished:()=>{}}));
   if(!paused.includes("Sharing is paused")){console.log("    paused notice missing");bad++;} else console.log("  paused notice renders");
