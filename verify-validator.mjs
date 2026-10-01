@@ -11,6 +11,8 @@ import {
   collectLoggedIds,
   nameSimilarity,
 } from "./src/core/validate-program.js";
+import { validate as validateSchema } from "./src/core/program-schema.js";
+import { readFileSync } from "node:fs";
 
 let failures = 0;
 function check(label, actual, expected) {
@@ -132,6 +134,27 @@ console.log("\n--- similarity behaviour it depends on ---");
 check("unrelated movements score low", nameSimilarity("Incline dumbbell press", "Front or goblet squat") < 0.5, true);
 check("a reworded target scores high", nameSimilarity("Drink 3 L water", "Drink 2 L water") >= 0.5, true);
 check("case and punctuation ignored", nameSimilarity("Cat–Cow → thoracic rotation", "cat cow thoracic rotation"), 1);
+
+console.log("\n--- Phase 4: the three programView definitions, merged into the fixture rows ---");
+// fixtures/programs.json is stale (it lacks joonatan-2026-09-29, juha-2026-09-29
+// and juha-2026-10), so each definition is merged into the newest row the fixture
+// has for that client: henna-2026-09, joonatan-2026-09, juha-2026-09-23. The
+// definitions are the files chat writes to the database after deploy.
+{
+  const rows = JSON.parse(readFileSync("fixtures/programs.json", "utf8"));
+  const rowFor = { henna: "henna-2026-09", joonatan: "joonatan-2026-09", juha: "juha-2026-09-23" };
+  for (const [client, rowId] of Object.entries(rowFor)) {
+    const row = rows.find((r) => r.id === rowId);
+    const pv = JSON.parse(readFileSync(`briefs/data/phase4/${client}-programview.json`, "utf8"));
+    const merged = { ...clone(row.definition), programView: pv };
+    const bare = validateSchema(row.definition);
+    const withView = validateSchema(merged);
+    check(`${client} (${rowId}): schema accepts the definition, 0 errors`, withView.errors, []);
+    check(`${client}: no new schema warnings`, withView.warnings.filter((w) => !bare.warnings.includes(w)), []);
+    const edit = validateProgramEdit(row.definition, merged, []);
+    check(`${client}: ID-permanence validator is happy (nothing blocks, nothing changes)`, [edit.ok, edit.findings.length], [true, 0]);
+  }
+}
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);
 process.exit(failures === 0 ? 0 : 1);
