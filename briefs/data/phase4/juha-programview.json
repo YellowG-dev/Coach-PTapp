@@ -1,0 +1,324 @@
+[
+  {
+    "title": "This block",
+    "subtitle": "7 Sep – 18 Oct 2026",
+    "color": "accent",
+    "defaultOpen": true,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Three balanced full-body sessions — A, B and C — instead of an upper/lower/full split. Every session covers the whole body, so a week with only two of them still trains everything."
+      },
+      {
+        "type": "heading",
+        "text": "Baseline week — this must happen"
+      },
+      {
+        "type": "paragraph",
+        "text": "2 strength · 1 Norwegian 4×4 · 1 Zone 2 · 1 tennis",
+        "tone": "muted"
+      },
+      {
+        "type": "heading",
+        "text": "Upside — good weeks only, in this order"
+      },
+      {
+        "type": "lines",
+        "items": [
+          "1. A second Norwegian 4×4 — the highest-value session for the VO2max target.",
+          "2. The third strength session.",
+          "3. A second Zone 2, or extra tennis."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "The upside sessions buy hypertrophy and aerobic gain. They are not needed to prevent regression, so a two-session week is a normal week, not a failed one.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "The week",
+    "subtitle": "Default rhythm — everything is movable",
+    "color": "accent",
+    "defaultOpen": true,
+    "body": [
+      {
+        "type": "week",
+        "week": "A"
+      },
+      {
+        "type": "paragraph",
+        "text": "Move anything from the Calendar — the app tracks what you actually did, not what was planned. This table is generated from the schedule itself, so it can never disagree with the app.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "a"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "b"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "b"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "c"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "c"
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Exercise rules",
+    "subtitle": "Why the program looks the way it does",
+    "color": "accent",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "barbell back squat, conventional deadlift, running, chest flys, walking lunge, standing calf raise (seated only), cable crunch. The first three are knee history; the rest are equipment or preference.",
+        "strong": "Permanently excluded:"
+      },
+      {
+        "type": "paragraph",
+        "text": "Open-chain knee extension puts peak patellofemoral stress and peak anterior tibial translation in the last 0–30°, which is the wrong place for an unoperated condyle lesion plus a hamstring-autograft ACL. Hold at 3 sets per session. If the knee swells within 48h of an A or B session, drop the extension and keep the curl.",
+        "strong": "Leg extension — 90° to 45° only, no lock-out."
+      },
+      {
+        "type": "paragraph",
+        "text": "log the weaker leg and let it set the pace. Weight usually stays the same and reps differ — note the difference on the exercise.",
+        "strong": "Single-leg work:"
+      },
+      {
+        "type": "paragraph",
+        "text": "double progression. Work up through the rep range; when every set hits the top at target RPE, add load and drop back to the bottom. Pull-ups are the exception — add reps before adding load.",
+        "strong": "Progression:"
+      },
+      {
+        "type": "paragraph",
+        "text": "Face pull is kept as a rear-delt and external-rotation movement, not a fly. It is the only direct counterweight to 11 pressing sets per rotation plus overhead tennis load.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "No-Gym — Bodyweight + Band",
+    "subtitle": "Swap any strength day to this when travelling",
+    "color": "cat:activity",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "bodyweight"
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "Progression works differently here. Climb the rep range first; once every set sits comfortably at the top, add band resistance or move to a harder variation rather than adding load.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Cardio — 4×4 and Zone 2",
+    "color": "accent2",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "cardio",
+        "keys": [
+          "hard"
+        ],
+        "excludeTyped": true
+      },
+      {
+        "type": "paragraph",
+        "text": "Zones run off a recorded peak of 179 bpm, not the age prediction — set Max HR to 179 in Settings and the percentages turn into real bpm. Treat it as a floor: if any session records a higher peak, raise it.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "Assault bike for the 4×4, not the incline treadmill — the 26 Aug session left swelling behind the knee. Revisit the treadmill only after four clear weeks.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "Intensity is not the problem: 6 of 6 sessions last block hit or beat target. Frequency is the only lever left, which is why a second 4×4 outranks a third strength session.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Tennis",
+    "subtitle": "Monday lesson · social play any time",
+    "color": "cat:tennis",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "The Monday coached lesson has its own slot, so it moves and clears like any other session. Social tennis with friends goes in as an extra activity from the Calendar."
+      },
+      {
+        "type": "paragraph",
+        "text": "Genuine Zone 3–4 work at roughly 115 average and 140–150 peak, but it is play, not a substitute for the 4×4. Both log peak and average heart rate into the same series as your other cardio.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Nutrition",
+    "color": "cat:nutrition",
+    "body": [
+      {
+        "type": "nutrition",
+        "order": [
+          "training",
+          "rest"
+        ],
+        "labels": {
+          "training": "Training day",
+          "rest": "Rest day"
+        }
+      },
+      {
+        "type": "paragraph",
+        "text": "Built from a measured TDEE of about 2,500 kcal — 2,530 average intake produced roughly 0.5 kg of net mass over seven weeks. Protein sits at 2.2 g/kg, comfortably above the ~1.6 g/kg plateau."
+      },
+      {
+        "type": "paragraph",
+        "text": "Hold 85.5–86.5 kg on the 7-day rolling average, never the daily number. Above 87.0 for two consecutive weeks, cut 150 kcal from rest days only. Below 85.0 for two consecutive weeks, add 150 kcal to training days.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Alcohol",
+    "color": "cat:check",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "One unit is one beer, a 12 cl glass of wine, or 4 cl of spirits — the Finnish standard portion, 12 g of pure alcohol. Pick the type, enter how many. \"None\" logs a zero in one tap."
+      },
+      {
+        "type": "paragraph",
+        "text": "The chart shows a running 7-day total, because the week is the unit that means anything. The dashed line sits at 14 units, THL's moderate-risk level for men — context, not a target to reach.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "Volume is not the concern here. Timing is: alcohol blunts overnight muscle protein synthesis, so keep it off the two nights following a strength session.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Skip days",
+    "color": "cat:check",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Mark a day Sick, Travel or Injured and it clears that day's strength, cardio, tennis and extra activities. Mobility, nutrition and the daily check stay — they matter most when everything else stops."
+      },
+      {
+        "type": "paragraph",
+        "text": "Your streak pauses rather than breaks, and nothing is deleted: unmark the day and it returns exactly as it was. Nutrition drops to rest-day targets automatically.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Deload",
+    "subtitle": "Week of 28 Sep in this block",
+    "color": "accent",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "The D button beside each week in the Calendar drops one set from every exercise while keeping the weight the same, and swaps hard intervals for Zone 2. A dashed outline marks roughly every fourth week as a suggestion."
+      },
+      {
+        "type": "paragraph",
+        "text": "No deload was taken in the previous five-week block. The week of 28 Sep is not optional this time.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "It stays a suggestion on purpose. Whether you need a deload depends on how the last three weeks actually felt, which a calendar has no way of knowing.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Testing",
+    "subtitle": "InBody every 8 weeks · VO2max every 4",
+    "color": "cat:testing",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Both are calculated from the 6 Sep 2026 baseline and appear on Today when due. To move one, turn it off in the Calendar and turn it on wherever you actually want it."
+      },
+      {
+        "type": "paragraph",
+        "text": "Retest VO2max on the same protocol and machine as the baseline, or the number means nothing.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "Block targets from the 6 Sep baseline: SMM 42.9 → 43.0–43.2 kg · body fat 13.6 → 13.0–13.5% · weight 85.5–86.5 kg · VO2max 39 → 40. Expect a smaller SMM increment than last block — part of the previous +0.9 kg was glycogen and its water, not contractile tissue.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Daily mobility",
+    "subtitle": "~10 min · order is the design",
+    "color": "cat:mobility",
+    "body": [
+      {
+        "type": "mobility"
+      },
+      {
+        "type": "paragraph",
+        "text": "Items 1–5 take about five minutes and are the daily non-negotiable core. Completion fell steadily by list position last block, so the items that matter most for the knee and low back now sit at the top. If you stop at item 5 on a bad day, you have done the ones that count.",
+        "tone": "muted"
+      },
+      {
+        "type": "paragraph",
+        "text": "No end-range hamstring stretching on the non-surgical side. The tightness there is asymptomatic and stable; stretching into it is the most likely way to turn it into a symptom.",
+        "tone": "muted"
+      }
+    ]
+  }
+]
