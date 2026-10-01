@@ -22,7 +22,7 @@
 
 import { dateKey, getWeekMonday } from "./dates.js";
 import { resolveSchedule } from "./engine.js";
-import { recordedWorkouts, dedupe, weeklyCardioMinutes } from "./cardio.js";
+import { recordedWorkouts, dedupe, weeklyCardioMinutes, isCardioActivity } from "./cardio.js";
 import { resolveForDate, slotOptionsFor, blocksFor } from "./program-schema.js";
 import { indexByDay } from "./adherence.js";
 import { collapseDays } from "./recovery.js";
@@ -205,7 +205,7 @@ function cardioMetric(ctx) {
       if (Object.values(blocks).some((b) => b && b.cardio)) declares = true;
     }
     const ov = indexByDay(ctx.overrideRows)[dateKey(d)];
-    if (ov && Array.isArray(ov.activities) && ov.activities.some((a) => a && typeof a.durationMin === "number")) extras = true;
+    if (ov && Array.isArray(ov.activities) && ov.activities.some((a) => isCardioActivity(a) && typeof a.durationMin === "number")) extras = true;
   }
   if (!declares && !extras) return none("No cardio in the programme");
   const total = weeklyCardioMinutes(monday, indexByDay(ctx.logRows), indexByDay(ctx.overrideRows), resolver);
@@ -479,7 +479,7 @@ export function needsAttention(ctx) {
     if (key > todayKey) break;
     const { program, info } = scheduleOn(ctx, date);
     const ov = ovByDay[key] || {};
-    const hasActivity = !(info && info.skip) && Array.isArray(ov.activities) && ov.activities.length > 0;
+    const hasActivity = Array.isArray(ov.activities) && ov.activities.length > 0;
     const planned = (slot) => Boolean(program && info && info.slots[slot]);
     const anyNonStrength = Boolean(program && (program.slots || []).some((sl) => sl !== "strength" && planned(sl)));
     const matches = (w) => {
