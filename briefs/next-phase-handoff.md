@@ -81,7 +81,9 @@ Coach → client → Programme tab → right panel:
 3. Check → Publish with an effective date (tomorrow or next Monday).
 Chat then verifies the published rows (validator, diff, Overview numbers).
 
-**Step 2 — chat writes the Phase 5 brief** (cardio client UI): the client
+**Step 2 — chat writes the Phase 5 brief** — **written 1 Oct:
+`briefs/step9-phase5-cardio-client.md`; a cloud session runs that file.**
+(cardio client UI): the client
 confirms or dismisses wearable matches; extras on any day; daily view shows
 duration, distance, avg/max zone, pace, note. Carried notes:
 - a confirmed PLANNED match is written as the block's logged duration
