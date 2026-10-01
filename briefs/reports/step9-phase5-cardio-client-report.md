@@ -115,3 +115,19 @@ Browser check (Ville build, fixture data, mocked backend): 40 passed, 0 failed. 
 3. **Unmapped strength in a cardio type.** If a coach ever lists `strengthTraining` in a `cardioTypes[].sports`, it is still treated as strength (tested), never as cardio.
 4. **Existing data.** No strength extra has been confirmed anywhere yet (Phase 5 is unmerged), so no legacy entries need migrating.
 5. Same browser-check limits as Phase 5: one client driven, fixture data, mocked backend.
+
+## Follow-up — single "OK" on a planned strength day (chat, 1 Oct 2026)
+
+John's call on Phase 5b open item 1: one button. `WorkoutOffer` now renders
+Dismiss only when given an `onDismiss`; the strength offer passes `OK` only.
+Behaviour unchanged (OK records the key, nothing else). Pushed by chat to the
+same branches, with no version bump.
+
+- `app.jsx` sha256 (four clients): `5a088e4e864c…`; `bundle.js` rebuilt.
+  `cardio.js` `4fdcbaf1`, `engine.js` `c3eb98c2`, `program-schema.js`
+  `e67329ea` unchanged.
+- Gates per client: delivery 95/0, history 29/0, wearable-scope 10/0,
+  cardio 74/0, cardio-client 23/0, build ok.
+- Browser check: 41 passed, 0 failed (new: exactly one OK, no Dismiss, no
+  Confirm). Screenshots `6-`, `6b-`, `6c-` re-shot. `browser-check.mjs` now
+  takes `VILLE_ROOT` and `SHOT_DIR` from the environment.

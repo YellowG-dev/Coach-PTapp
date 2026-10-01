@@ -24,6 +24,7 @@
   ok   planned strength day (Today): offered inside the strength card, not under Recorded
   ok   planned strength day: weekly cardio line unchanged by the gym session
   ok   planned strength day (Train): the offer appears there too
+  ok   planned strength day: one OK button, no Dismiss
   ok   planned strength day: confirm records only the key — no activity, no ticks, no numbers
   ok   planned strength day: gone after confirm
   ok   no page errors (strength planned)
@@ -39,4 +40,4 @@
   ok   calendar add (Other): name kept, typeId null, duration stored
   ok   no page errors (signed out)
 
-browser check: 40 passed, 0 failed
+browser check: 41 passed, 0 failed

@@ -3,8 +3,8 @@ import { spawn } from "node:child_process";
 import assert from "node:assert/strict";
 const require = createRequire("/opt/node-tools/node_modules/");
 const { chromium } = require("playwright");
-const ROOT = "/home/user/Ville-PTapp";
-const OUT = "/home/user/Coach-PTapp/briefs/reports/step9-phase5-cardio-client";
+const ROOT = process.env.VILLE_ROOT || "/home/user/Ville-PTapp";
+const OUT = process.env.SHOT_DIR || "/home/user/Coach-PTapp/briefs/reports/step9-phase5-cardio-client";
 const { PROGRAM } = await import(`${ROOT}/src/core/program-ville.js`);
 
 const server = spawn("python3", ["-m", "http.server", "8765"], { cwd: ROOT, stdio: "ignore" });
@@ -227,7 +227,12 @@ try {
     check("planned strength day (Train): the offer appears there too", async () => {});
     assert.match(await text(page), /Recorded strength session/i);
     await shot(page, "6b-train-strength-offer");
-    await page.getByRole("button", { name: "Confirm", exact: true }).first().click();
+    const offer = page.locator("div.rounded-lg", { hasText: "Recorded strength session" });
+    check("planned strength day: one OK button, no Dismiss", async () => {});
+    assert.equal(await offer.getByRole("button", { name: "OK", exact: true }).count(), 1);
+    assert.equal(await offer.getByRole("button", { name: "Dismiss", exact: true }).count(), 0);
+    assert.equal(await offer.getByRole("button", { name: "Confirm", exact: true }).count(), 0);
+    await offer.getByRole("button", { name: "OK", exact: true }).first().click();
     await page.waitForTimeout(500);
     const ov = await ls(page, "overrides"), log = await ls(page, "log");
     check("planned strength day: confirm records only the key — no activity, no ticks, no numbers", () => {
