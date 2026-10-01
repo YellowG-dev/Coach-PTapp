@@ -16,10 +16,10 @@ const TODAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate
 const UID = "11111111-2222-3333-4444-555555555555";
 
 // A delivered programme: run every day, with cardio target + duration task.
-function fixtureProgram(withCardio) {
+function fixtureProgram(withCardio, strengthDay = false) {
   const d = JSON.parse(JSON.stringify(PROGRAM));
   const week = {};
-  for (let i = 0; i < 7; i++) week[i] = { strength: null, run: "easy", bike: null, yoga: null };
+  for (let i = 0; i < 7; i++) week[i] = { strength: strengthDay ? "a" : null, run: "easy", bike: null, yoga: null };
   d.schedule = { A: week, B: week };
   delete d.startDate;
   if (withCardio) {
@@ -55,7 +55,7 @@ const session = {
   user: { id: UID, aud: "authenticated", role: "authenticated", email: "t@example.com", app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" },
 };
 
-async function open(browser, { withCardio, workouts = [], overrides = {}, hrMax = 180, signedIn = true }) {
+async function open(browser, { withCardio, workouts = [], overrides = {}, hrMax = 180, signedIn = true, strengthDay = false }) {
   const ctx = await browser.newContext({ viewport: { width: 420, height: 1100 } });
   const page = await ctx.newPage();
   const errors = [];
@@ -68,13 +68,13 @@ async function open(browser, { withCardio, workouts = [], overrides = {}, hrMax 
     if (withCardio) localStorage.setItem(P + "programsV2", JSON.stringify({ rows: [{ id: "p1", name: "Fixture", assigned_to: UID, effective_from: "-infinity", definition: prog }], fetchedAt: new Date().toISOString(), userId: UID }));
     localStorage.setItem(P + "overrides", JSON.stringify(overrides));
     localStorage.setItem(P + "settings", JSON.stringify({ gentler: false, hrMax }));
-  }, { withCardio, prog: fixtureProgram(true), overrides, hrMax, session, signedIn, UID });
+  }, { withCardio, prog: fixtureProgram(true, strengthDay), overrides, hrMax, session, signedIn, UID });
   await page.route("**/rest/v1/**", (route) => {
     const u = route.request().url();
     const json = (b) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(b) });
     if (u.includes("/wearable_workouts")) return json(workouts);
     if (u.includes("/wearable_connections")) return json([{ user_id: UID, vendor: "polar", status: "active", connected_at: null, last_synced_at: null }]);
-    if (u.includes("/programs")) return json(withCardio ? [{ id: "p1", name: "Fixture", assigned_to: UID, effective_from: "-infinity", definition: fixtureProgram(true) }] : []);
+    if (u.includes("/programs")) return json(withCardio ? [{ id: "p1", name: "Fixture", assigned_to: UID, effective_from: "-infinity", definition: fixtureProgram(true, strengthDay) }] : []);
     return json([]);
   });
   await page.route("**/functions/v1/**", (r) => r.fulfill({ status: 200, contentType: "application/json", body: "{}" }));
@@ -208,6 +208,81 @@ try {
     check("calendar remove still works", async () => {});
     assert.equal(((await ls(page, "overrides")) || {})[key]?.activities, undefined);
     check("no page errors (calendar)", () => assert.deepEqual(errors, []));
+    await ctx.close();
+  }
+  /* 7. Strength workout on a planned strength day (Today, Train, Calendar) */
+  {
+    const gymW = wk("G1", "strengthTraining", 55, { distance_km: null, hr_avg: 118, hr_max: 150, started_at: `${TODAY}T18:00:00Z` });
+    const { page, ctx, errors } = await open(browser, { withCardio: true, strengthDay: true, workouts: [gymW] });
+    let t = await text(page);
+    check("planned strength day (Today): offered inside the strength card, not under Recorded", () => {
+      assert.match(t, /Recorded strength session/i);
+      assert.doesNotMatch(t, /Strength · not cardio/i);
+      assert.doesNotMatch(t, /RECORDED\s*\n\s*Your watch recorded/i);
+    });
+    check("planned strength day: weekly cardio line unchanged by the gym session", () => assert.match(t, /Cardio this week: 0 min/));
+    await shot(page, "6-today-strength-planned-day");
+    await page.getByRole("button", { name: "Train", exact: true }).first().click();
+    await page.waitForTimeout(600);
+    check("planned strength day (Train): the offer appears there too", async () => {});
+    assert.match(await text(page), /Recorded strength session/i);
+    await shot(page, "6b-train-strength-offer");
+    await page.getByRole("button", { name: "Confirm", exact: true }).first().click();
+    await page.waitForTimeout(500);
+    const ov = await ls(page, "overrides"), log = await ls(page, "log");
+    check("planned strength day: confirm records only the key — no activity, no ticks, no numbers", () => {
+      assert.deepEqual(ov[TODAY].dismissedWorkouts, ["polar:G1"]);
+      assert.equal(ov[TODAY].activities, undefined);
+      assert.ok(!log || !log[TODAY] || (Object.keys(log[TODAY].done || {}).length === 0 && !log[TODAY].numbers));
+    });
+    check("planned strength day: gone after confirm", async () => {});
+    assert.doesNotMatch(await text(page), /Recorded strength session/i);
+    check("no page errors (strength planned)", () => assert.deepEqual(errors, []));
+    await ctx.close();
+  }
+  /* 8. Calendar on a planned strength day */
+  {
+    const gymW = wk("G2", "strengthTraining", 55, { distance_km: null, started_at: `${TODAY}T18:00:00Z` });
+    const { page, ctx } = await open(browser, { withCardio: true, strengthDay: true, workouts: [gymW] });
+    await page.getByRole("button", { name: /Calendar/i }).first().click();
+    await page.waitForTimeout(800);
+    check("planned strength day (Calendar): offer in the strength row", async () => {});
+    assert.match(await text(page), /Recorded strength session/i);
+    await shot(page, "6c-calendar-strength-offer");
+    await ctx.close();
+  }
+  /* 9. Strength workout on a rest day (no strength slot) */
+  {
+    const gymW = wk("G3", "strengthTraining", 55, { distance_km: null, hr_avg: 118, hr_max: 150, started_at: `${TODAY}T18:00:00Z` });
+    const { page, ctx, errors } = await open(browser, { withCardio: true, strengthDay: false, workouts: [gymW, wk("B9", "cycling", 30)] });
+    let t = await text(page);
+    check("no strength slot: offered under Recorded as Strength · not cardio", () => {
+      assert.match(t, /Strength · not cardio/i);
+      assert.match(t, /Strength training · 55 min/);
+      assert.doesNotMatch(t, /Recorded strength session/i);
+    });
+    await shot(page, "6d-today-strength-rest-day");
+    await page.locator("div.rounded-lg", { hasText: "Strength · not cardio" }).getByRole("button", { name: "Confirm", exact: true }).click();
+    await page.waitForTimeout(500);
+    const ov = await ls(page, "overrides");
+    check("no strength slot: confirm writes one kind:strength activity", () => {
+      const a = ov[TODAY].activities;
+      assert.equal(a.length, 1); assert.equal(a[0].kind, "strength"); assert.equal(a[0].name, "Strength training"); assert.equal(a[0].durationMin, 55);
+    });
+    t = await text(page);
+    check("confirmed strength extra: marked not cardio; weekly cardio line stays 0", () => {
+      assert.match(t, /55 min.*not cardio|1 h.*not cardio/i);
+      assert.match(t, /Cardio this week: 0 min/);
+    });
+    await shot(page, "6e-today-strength-extra-confirmed");
+    await page.getByRole("button", { name: "Confirm", exact: true }).first().click(); // the cycling extra
+    await page.waitForTimeout(500);
+    check("a cardio extra the same day still counts (30 min)", async () => {});
+    assert.match(await text(page), /Cardio this week: 30 min/);
+    await page.reload(); await page.waitForTimeout(4500);
+    check("confirmed strength extra not re-offered after reload", async () => {});
+    assert.doesNotMatch(await text(page), /Strength · not cardio/i);
+    check("no page errors (strength rest day)", () => assert.deepEqual(errors, []));
     await ctx.close();
   }
   /* 6. Calendar form without cardioTypes (compiled programme) + signed out */

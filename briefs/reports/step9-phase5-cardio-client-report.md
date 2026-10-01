@@ -65,3 +65,53 @@ Browser check (headless Chromium, built Ville bundle, fake signed-in session, mo
 4. **Unplanned extras on a skip day.** Extras now also count in the Today ring (they are ordinary ticks in the "Extra Activity" section). Adherence and streak still skip the day.
 5. **Browser check limits.** One client (Ville) was driven in the browser, against fixture data and a mocked backend; the other three builds share `app.jsx` byte-for-byte but were not individually screenshotted. No live-data run was possible from the session.
 6. **Housekeeping.** `npm install` and the Coach `verify-browser` run touched `package-lock.json` and `briefs/reports/r3/*`; both reverted, not part of the PRs.
+
+---
+
+# Phase 5b — wearable strength workouts, outside cardio
+
+## Result
+
+Done, on the same five branches (the five open PRs update; no new PRs). Versions unchanged: clients 5.6.0-beta1, Coach 0.11.0. All gates `0 failed`; browser check now 40 passed, 0 failed (was 27).
+
+## Changes
+
+All four clients, identical:
+
+- `src/core/cardio.js` — `STRENGTH_SPORTS`, `isStrengthWorkout`, `isCardioActivity`. `matchDay` now returns `{ planned, extras, strength }`; a strength workout goes only to `strength`, after the same dedupe / recorded-session / dismissed / confirmed filtering. `activityFromWorkout` tags a strength workout `kind: "strength"`, name "Strength training". `weeklyCardioMinutes` counts only `isCardioActivity` entries. Comments updated.
+- `src/app.jsx` — `splitMatches` returns `strengthOnPlan`. On a day with a strength slot scheduled, the gym session is offered inside the strength block's card on Today, Train and Calendar ("Recorded strength session"); Confirm and Dismiss both only record the key (no ticks, no numbers, no activity). Otherwise (no strength slot, or a skip day) it appears under Recorded as "Strength · not cardio"; Confirm writes one `kind: "strength"` activity. A confirmed strength extra shows "not cardio" next to its details.
+- `test-cardio.mjs` — 11 new checks (63 → 74). `test-cardio-client.mjs` — 5 new checks (18 → 23).
+- `bundle.js` rebuilt (`styles.css` byte-identical).
+
+Coach:
+
+- `src/core/cardio.js` — byte-identical copy.
+- `src/core/overview.js` — the "has extras" test uses `isCardioActivity`. The existing behaviour of `strengthTraining` matching the strength slot in the unplanned-session flag is untouched.
+- `verify-overview.mjs` — 2 new checks: a week with a strength extra plus a cardio extra shows only the cardio minutes; a strength extra alone adds 0.
+- `bundle.js` rebuilt. `COACH_VERSION` stays 0.11.0.
+- Screenshots `6-…` to `6e-…` added; `browser-check.mjs` and its output updated.
+
+## Gates
+
+Per client (all four identical): `verify-program-delivery` 95 passed, 0 failed · `test-history-versions` 29 passed, 0 failed · `test-wearable-scope` 10 passed, 0 failed · `test-cardio` 74 passed, 0 failed · `test-cardio-client` 23 passed, 0 failed · `npm run build` ok.
+
+Coach: `verify-adherence` 36/36 · `verify-browser` All browser checks passed · `verify-editor` 46 passed, 0 failed · `verify-overview` 81 passed, 0 failed · `verify-progress` 40 passed, 0 failed · `verify-publish` 31/31 · `verify-recovery` 12 passed, 0 failed · `verify-validator` ALL CHECKS PASSED · `verify` ALL CHECKS PASSED · `verify-render` All render checks passed (bundled first) · `npm run build` ok.
+
+Browser check (Ville build, fixture data, mocked backend): 40 passed, 0 failed. New: gym session on a planned strength day (Today, Train, Calendar) offered inside the strength block, confirm writes only the key and leaves the weekly cardio line at 0; gym session on a day with no strength slot shown under Recorded as "Strength · not cardio", confirm writes one `kind: "strength"` activity, weekly cardio line stays 0 while a cardio extra the same day still counts, neither re-offered after reload.
+
+## Hashes
+
+- `cardio.js` md5 (all five): **`4fdcbaf1147c04dd5cef76ad829dc7b2`** (was `35e010b380dbe8fe1b4c55f1a782ffe4`)
+- `engine.js` md5 (all five): `c3eb98c215c5d5215bf468059fc07a44` — unchanged
+- `program-schema.js` md5 (all five): `e67329ea75002a56204d6d4ae435e201` — unchanged
+- `app.jsx` sha256 (four clients): `a1af64aa7e3bf4e96406f53c0096838d82fe174a31e1877d758aca0e7b86b9ee` (was `49410325…`)
+- `wearables.js` (four clients): identical, `9ae43dba4d4b…` sha256
+- `test-cardio.mjs` md5 `6539a51f…`, `test-cardio-client.mjs` md5 `f9308d27…` (four clients)
+
+## Open
+
+1. **Acknowledge, not confirm.** On a planned strength day both buttons write the same thing (the key into `dismissedWorkouts`), as the brief specifies. The two-button UI therefore has no behavioural difference; say if you would rather show a single "OK".
+2. **Order under Recorded.** Strength entries are listed after cardio extras.
+3. **Unmapped strength in a cardio type.** If a coach ever lists `strengthTraining` in a `cardioTypes[].sports`, it is still treated as strength (tested), never as cardio.
+4. **Existing data.** No strength extra has been confirmed anywhere yet (Phase 5 is unmerged), so no legacy entries need migrating.
+5. Same browser-check limits as Phase 5: one client driven, fixture data, mocked backend.

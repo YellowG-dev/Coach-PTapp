@@ -21,9 +21,22 @@
   ok   calendar add: Phase 2 entry shape, minutes from h:mm:ss
   ok   calendar remove still works
   ok   no page errors (calendar)
+  ok   planned strength day (Today): offered inside the strength card, not under Recorded
+  ok   planned strength day: weekly cardio line unchanged by the gym session
+  ok   planned strength day (Train): the offer appears there too
+  ok   planned strength day: confirm records only the key — no activity, no ticks, no numbers
+  ok   planned strength day: gone after confirm
+  ok   no page errors (strength planned)
+  ok   planned strength day (Calendar): offer in the strength row
+  ok   no strength slot: offered under Recorded as Strength · not cardio
+  ok   no strength slot: confirm writes one kind:strength activity
+  ok   confirmed strength extra: marked not cardio; weekly cardio line stays 0
+  ok   a cardio extra the same day still counts (30 min)
+  ok   confirmed strength extra not re-offered after reload
+  ok   no page errors (strength rest day)
   ok   signed out, no cardio fields: Today renders, no Recorded group, no weekly line
   ok   calendar form (no cardioTypes): picker shows Other only
   ok   calendar add (Other): name kept, typeId null, duration stored
   ok   no page errors (signed out)
 
-browser check: 27 passed, 0 failed
+browser check: 40 passed, 0 failed

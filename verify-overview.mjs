@@ -260,6 +260,15 @@ for (const p of roster) {
   const ctx = { ...juha, programRows: rowsP, logRows: logsRows, overrideRows: [] };
   const r = computeMetric("cardio", ctx);
   check("cardio sums declared duration task", r.value === "75 min" || /^\d+ min$/.test(r.value), r);
+  // Phase 5b: a confirmed strength extra is not cardio. Only the cardio extra counts.
+  const ovs = [{ day: "2026-09-16", payload: { activities: [
+    { id: "polar:g1", name: "Strength training", kind: "strength", source: "wearable", durationMin: 55 },
+    { id: "polar:w1", name: "Walk", durationMin: 20 },
+  ] } }];
+  const mixed = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: ovs });
+  check("strength extra + cardio extra shows only the cardio minutes", mixed.value === "20 min", mixed);
+  const onlyStrength = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: [{ day: "2026-09-16", payload: { activities: [ovs[0].payload.activities[0]] } }] });
+  check("a strength extra alone adds 0 (declared cardio block, nothing logged)", onlyStrength.value === "0 min", onlyStrength);
 }
 
 // 10. needs attention
