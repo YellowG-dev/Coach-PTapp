@@ -479,7 +479,7 @@ export function needsAttention(ctx) {
     if (key > todayKey) break;
     const { program, info } = scheduleOn(ctx, date);
     const ov = ovByDay[key] || {};
-    const hasActivity = !(info && info.skip) && Array.isArray(ov.activities) && ov.activities.length > 0;
+    const hasActivity = Array.isArray(ov.activities) && ov.activities.length > 0;
     const planned = (slot) => Boolean(program && info && info.slots[slot]);
     const anyNonStrength = Boolean(program && (program.slots || []).some((sl) => sl !== "strength" && planned(sl)));
     const matches = (w) => {

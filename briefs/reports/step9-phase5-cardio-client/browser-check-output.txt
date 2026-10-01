@@ -1,0 +1,29 @@
+  ok   planned: target line shows duration, distance, zones with bpm, pace, note
+  ok   planned: suggestion shown inside the run section, not as Recorded
+  ok   weekly line shown with 0 min before any confirm
+  ok   nothing written before the client taps
+  ok   confirm planned: minutes written to run-dur
+  ok   confirm planned: no activities[] entry
+  ok   confirm planned: key remembered in dismissedWorkouts
+  ok   confirm planned: suggestion gone, weekly line 42 min
+  ok   confirm planned: not re-offered after reload
+  ok   no page errors (planned)
+  ok   extra: shown in Recorded group, marked not planned
+  ok   confirm extra: one activity written with the Phase 2 shape
+  ok   confirm extra: moves from Recorded to Extra Activity with its detail; weekly 60
+  ok   confirm extra: not re-offered after reload
+  ok   no page errors (extra)
+  ok   dismiss: key recorded, nothing counted
+  ok   dismiss: not re-offered after reload
+  ok   skip day: notice says no sessions removed by the extra; extra shown with detail
+  ok   skip day: still labelled as skip, not a training day (no Run section)
+  ok   calendar form (with cardioTypes): picker lists the coach's types plus Other
+  ok   calendar add: Phase 2 entry shape, minutes from h:mm:ss
+  ok   calendar remove still works
+  ok   no page errors (calendar)
+  ok   signed out, no cardio fields: Today renders, no Recorded group, no weekly line
+  ok   calendar form (no cardioTypes): picker shows Other only
+  ok   calendar add (Other): name kept, typeId null, duration stored
+  ok   no page errors (signed out)
+
+browser check: 27 passed, 0 failed

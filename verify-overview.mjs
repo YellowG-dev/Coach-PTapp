@@ -198,7 +198,10 @@ for (const p of roster) {
   check("walk on a rest day with a client activity → no flag", flags(ctxOf(mkDef({}), [wo(D, "walking")], act)).length === 0);
   check("walk on a rest day without → flag", flags(ctxOf(mkDef({}), [wo(D, "walking")])).length === 1);
   const skip = [{ day: D, payload: { skip: "travel", activities: [{ id: "a1", name: "Walk" }] } }];
-  check("workout on a skip day → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)).length === 1, flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)));
+  // D1 (1 Oct 2026): extras logged on a skip day count, so they also explain a workout.
+  check("workout on a skip day with a client extra → no flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)).length === 0, flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)));
+  const skipBare = [{ day: D, payload: { skip: "travel" } }];
+  check("workout on a skip day with no extra → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skipBare)).length === 1);
 }
 
 // 6. Henna's string scales get labels
