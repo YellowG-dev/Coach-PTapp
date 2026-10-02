@@ -267,6 +267,23 @@ for (const p of roster) {
   ] } }];
   const mixed = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: ovs });
   check("strength extra + cardio extra shows only the cardio minutes", mixed.value === "20 min", mixed);
+  // Phase 6: yoga is not cardio either. A yoga extra plus a cardio extra shows only the cardio minutes.
+  const ovy = [{ day: "2026-09-16", payload: { activities: [
+    { id: "polar:y1", name: "Yoga", kind: "yoga", source: "wearable", durationMin: 60 },
+    { id: "polar:w1", name: "Walk", durationMin: 20 },
+  ] } }];
+  const mixedYoga = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: ovy });
+  check("yoga extra + cardio extra shows only the cardio minutes", mixedYoga.value === "20 min", mixedYoga);
+  // a cardio target on a yoga block does not make the week a cardio week
+  const yDef = JSON.parse(JSON.stringify(programs[0].definition));
+  yDef.slots = ["yoga"]; yDef.blocks = { yoga: { session: { label: "Yoga", exercises: [{ id: "y-dur", name: "Y", type: "number" }], cardio: { durationTaskId: "y-dur" } } } };
+  yDef.slotMeta = { yoga: { label: "Yoga", color: "#A99BC9" } }; yDef.slotOptions = { yoga: [{ value: null, label: "None" }, { value: "session", label: "Yoga" }] };
+  yDef.schedule = { A: {}, B: {} }; delete yDef.cardioTypes; delete yDef.programView;
+  const yCtx = { ...ctx, programRows: [{ id: "y", name: "Y", assigned_to: ID.juha, effective_from: "-infinity", definition: yDef }], logRows: [], overrideRows: [] };
+  const yr = computeMetric("cardio", yCtx);
+  check("a cardio target declared on a yoga block is not a cardio week", yr.value === null && /No cardio/.test(yr.note), yr);
+  const onlyYoga = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: [{ day: "2026-09-16", payload: { activities: [ovy[0].payload.activities[0]] } }] });
+  check("a yoga extra alone adds 0", onlyYoga.value === "0 min", onlyYoga);
   const onlyStrength = computeMetric("cardio", { ...ctx, logRows: [], overrideRows: [{ day: "2026-09-16", payload: { activities: [ovs[0].payload.activities[0]] } }] });
   check("a strength extra alone adds 0 (declared cardio block, nothing logged)", onlyStrength.value === "0 min", onlyStrength);
 }

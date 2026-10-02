@@ -10,7 +10,10 @@ import {
   addBlock, retireBlock, restoreBlock, setBlockCardio, setHrZones, standardHrZones, setCardioTypes,
   setScheduleCell, moveScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions,
   saveDraft, loadDraft, clearDraft, draftStatus,
+  availableStandardSlots, addSlot, addStandardSlot, standardSlotSpec, slotCountsAsCardio, cardioSlots,
+  useStandardCardioTypes, sportProblem, SPORT_CHOICES,
 } from "./src/core/editor.js";
+import { validate, STANDARD_SLOTS, KNOWN_SPORTS } from "./src/core/program-schema.js";
 import { collectLoggedIds } from "./src/core/validate-program.js";
 import { preflight } from "./src/core/publish.js";
 import { resolveSchedule } from "./src/core/engine.js";
@@ -590,6 +593,201 @@ check("draft storage: save → load round-trips; stale baseId detected; broken s
   assert.strictEqual(saveDraft(null, ID.ville, "b", d), false);
   assert.strictEqual(loadDraft(undefined, ID.ville), null);
   assert.ok(setDayNote(ville, "A", "1", "still works").schedule.A["1"].note);
+});
+
+
+/* ------------------------------- Phase 6 ----------------------------------- */
+// Standard slots, custom slots and cardio types. Every result must pass the same
+// validate() the client uses.
+
+const CLIENTS = [["henna", ID.henna], ["joonatan", ID.joonatan], ["ville", ID.ville], ["juha", ID.juha]];
+const baseOf = (pid) => draftOf(pid).draft;
+const errs = (def) => validate(def).errors;
+
+check("every fixture programme starts valid (so any error below is the edit's)", () => {
+  for (const [n, pid] of CLIENTS) assert.deepStrictEqual(errs(baseOf(pid)), [], n);
+});
+
+check("availableStandardSlots lists the catalogue slots the programme lacks, in catalogue order", () => {
+  const henna = baseOf(ID.henna);
+  assert.deepStrictEqual(henna.slots, ["strength", "yoga"]);
+  assert.deepStrictEqual(availableStandardSlots(henna).map((s) => s.id), ["run", "walk", "swim", "bike", "cardio"]);
+  assert.deepStrictEqual(availableStandardSlots(baseOf(ID.juha)).map((s) => s.id), ["run", "walk", "swim", "bike"]);
+});
+
+check("adding each standard slot to each fixture programme validates with 0 errors", () => {
+  for (const [n, pid] of CLIENTS) {
+    for (const s of availableStandardSlots(baseOf(pid))) {
+      const out = addStandardSlot(baseOf(pid), s.id);
+      assert.deepStrictEqual(errs(out), [], `${n} + ${s.id}`);
+      assert.deepStrictEqual(out.slots, [...baseOf(pid).slots, s.id]);
+      assert.deepStrictEqual(out.slotMeta[s.id], { label: s.label, color: s.color });
+      assert.deepStrictEqual(out.blocks[s.id], {});
+      assert.deepStrictEqual(out.slotOptions[s.id], [{ label: "None", value: null }]);
+    }
+  }
+});
+
+check("adding all the missing standard slots at once validates, and nothing else in the programme changes", () => {
+  for (const [n, pid] of CLIENTS) {
+    const base = baseOf(pid);
+    let out = base;
+    for (const s of availableStandardSlots(base)) out = addStandardSlot(out, s.id);
+    assert.deepStrictEqual(errs(out), [], n);
+    assert.deepStrictEqual(out.slots.slice(0, base.slots.length), base.slots);
+    for (const k of Object.keys(base)) {
+      if (["slots", "slotMeta", "blocks", "slotOptions"].includes(k)) continue;
+      assert.deepStrictEqual(out[k], base[k], `${n}.${k}`);
+    }
+    for (const sl of base.slots) {
+      assert.deepStrictEqual(out.blocks[sl], base.blocks[sl], `${n} blocks.${sl}`);
+      assert.deepStrictEqual(out.slotMeta[sl], base.slotMeta[sl]);
+      assert.deepStrictEqual(out.slotOptions[sl], base.slotOptions[sl]);
+    }
+  }
+});
+
+check("a custom slot (client-specific, like Tennis) validates on every fixture programme", () => {
+  for (const [n, pid] of CLIENTS) {
+    const out = addSlot(baseOf(pid), { id: "padel", label: "Padel", color: "#8B7BD8" });
+    assert.deepStrictEqual(errs(out), [], n);
+    assert.ok(out.slots.includes("padel"));
+  }
+});
+
+check("adding an existing slot id throws (standard, custom and client-specific alike)", () => {
+  assert.throws(() => addStandardSlot(baseOf(ID.henna), "strength"), /already exists/);
+  assert.throws(() => addStandardSlot(addStandardSlot(baseOf(ID.henna), "walk"), "walk"), /already exists/);
+  assert.throws(() => addSlot(baseOf(ID.juha), { id: "tennis", label: "Tennis", color: "#6FCF97" }), /already exists/);
+  assert.throws(() => addSlot(baseOf(ID.ville), { id: "run", label: "Run again", color: "#6FCF97" }), /already exists/);
+});
+
+check("addSlot rejects a bad id, an empty label and a non-hex colour; an unknown standard id throws", () => {
+  const d = baseOf(ID.henna);
+  for (const id of ["", "Walk", "1walk", "wa lk", "walk!", "x".repeat(33)]) assert.throws(() => addSlot(d, { id, label: "L", color: "#112233" }), /slot id/, JSON.stringify(id));
+  assert.throws(() => addSlot(d, { id: "ok", label: "  ", color: "#112233" }), /label/);
+  for (const color of ["red", "#123", "112233", "#12345g"]) assert.throws(() => addSlot(d, { id: "ok", label: "L", color }), /colour/, color);
+  assert.throws(() => standardSlotSpec("tennis"), /not a standard slot/);
+});
+
+check("adding a slot never mutates its input", () => {
+  const d = baseOf(ID.henna), snap = clone(d);
+  addStandardSlot(d, "walk");
+  assert.deepStrictEqual(d, snap);
+});
+
+check("a slot cannot be removed or renamed: the editor has no such operation, and slot ids survive every edit", () => {
+  const src = fs.readFileSync("./src/core/editor.js", "utf8");
+  assert.ok(!/export function (removeSlot|renameSlot|deleteSlot)/.test(src));
+  const out = addStandardSlot(baseOf(ID.henna), "walk");
+  for (const sl of baseOf(ID.henna).slots) assert.ok(out.slots.includes(sl));
+});
+
+check("Henna: add Walk, add a block, place it on Tue and Thu — the whole publish check passes", () => {
+  let d = addStandardSlot(baseOf(ID.henna), "walk");
+  d = addBlock(d, "walk", "Easy walk", "Easy");
+  assert.deepStrictEqual(d.slotOptions.walk, [{ label: "None", value: null }, { label: "Easy", value: "easy-walk" }]);
+  d = setScheduleCell(d, "A", "2", "walk", "easy-walk");
+  d = setScheduleCell(d, "A", "4", "walk", "easy-walk");
+  d = setScheduleCell(d, "B", "2", "walk", "easy-walk");
+  d = setScheduleCell(d, "B", "4", "walk", "easy-walk");
+  assert.deepStrictEqual(errs(d), []);
+  const r = pf(ID.henna, "Henna", d);
+  assert.deepStrictEqual(r.blocking, []);
+  assert.strictEqual(r.ok, true);
+  const hits = [2, 4].map((dow) => resolveSchedule(new Date(2026, 9, 6 + (dow - 2)), "auto", {}, d).slots.walk);
+  assert.deepStrictEqual(hits, ["easy-walk", "easy-walk"]);
+});
+
+check("after a slot is added, its block takes a cardio target and a duration task (as for any cardio slot)", () => {
+  let d = addBlock(addStandardSlot(baseOf(ID.henna), "walk"), "walk", "Easy walk");
+  d = addNewExercise(d, "walk", "easy-walk", { name: "Walk time", type: "number", unit: "min" }, new Set());
+  const id = d.blocks.walk["easy-walk"].exercises[0].id;
+  d = setBlockCardio(d, "walk", "easy-walk", { durationMin: 30, durationTaskId: id });
+  assert.deepStrictEqual(errs(d), []);
+  assert.strictEqual(d.blocks.walk["easy-walk"].cardio.durationTaskId, id);
+});
+
+check("slotCountsAsCardio / cardioSlots: strength and yoga are out, every other slot is in", () => {
+  assert.strictEqual(slotCountsAsCardio("strength"), false);
+  assert.strictEqual(slotCountsAsCardio("yoga"), false);
+  for (const sl of ["run", "walk", "swim", "bike", "cardio", "tennis", "padel"]) assert.strictEqual(slotCountsAsCardio(sl), true, sl);
+  assert.deepStrictEqual(cardioSlots(baseOf(ID.juha)), ["cardio", "tennis"]);
+  assert.deepStrictEqual(cardioSlots(baseOf(ID.henna)), []);
+  assert.deepStrictEqual(STANDARD_SLOTS.filter((s) => !s.countsAsCardio).map((s) => s.id), ["strength", "yoga"]);
+});
+
+check("the editor's Cardio target panel and cardio-type Slot list follow slotCountsAsCardio (source)", () => {
+  const ui = fs.readFileSync("./src/editor.jsx", "utf8");
+  assert.ok(/slotCountsAsCardio\(slot\) && \(/.test(ui), "target panel gated on slotCountsAsCardio");
+  assert.ok(!/slot [!=]== "strength"/.test(ui), "no hard-coded strength check left");
+  assert.ok(/cardioSlots\(draft\)/.test(ui), "Slot dropdown lists cardio slots only");
+});
+
+check("Use standard cardio types: Run, Walk, Bike, Swim, Cardio; linked only to slots the programme has; validates", () => {
+  const henna = useStandardCardioTypes(baseOf(ID.henna));
+  assert.deepStrictEqual(henna.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio"]);
+  assert.ok(henna.cardioTypes.every((t) => t.slot === undefined), "Henna has none of those slots: extras-only");
+  assert.deepStrictEqual(errs(henna), []);
+  assert.deepStrictEqual(henna.cardioTypes.find((t) => t.id === "walk").sports, ["walking", "hiking"]);
+
+  const ville = useStandardCardioTypes(baseOf(ID.ville));
+  const slotOf = Object.fromEntries(ville.cardioTypes.map((t) => [t.id, t.slot]));
+  assert.deepStrictEqual(slotOf, { run: "run", walk: undefined, swim: undefined, bike: "bike", cardio: undefined });
+  assert.deepStrictEqual(errs(ville), []);
+
+  const withWalk = useStandardCardioTypes(addStandardSlot(baseOf(ID.henna), "walk"));
+  assert.strictEqual(withWalk.cardioTypes.find((t) => t.id === "walk").slot, "walk");
+  assert.deepStrictEqual(errs(withWalk), []);
+
+  const all = baseOf(ID.juha);
+  let full = all;
+  for (const s of availableStandardSlots(all)) full = addStandardSlot(full, s.id);
+  const linked = useStandardCardioTypes(full);
+  assert.ok(linked.cardioTypes.every((t) => t.slot === t.id), "every type linked to its own slot");
+  assert.deepStrictEqual(errs(linked), []);
+  assert.deepStrictEqual(validate(linked).warnings.filter((w) => /watch-sport|more than one/.test(w)), []);
+});
+
+check("Use standard cardio types keeps the coach's existing types (by id) and never duplicates", () => {
+  const mine = setCardioTypes(baseOf(ID.henna), [{ id: "run", label: "My run", sports: ["running", "hiking"] }]);
+  const out = useStandardCardioTypes(mine);
+  assert.strictEqual(out.cardioTypes.find((t) => t.id === "run").label, "My run");
+  assert.deepStrictEqual(out.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio"]);
+  assert.deepStrictEqual(useStandardCardioTypes(out).cardioTypes, out.cardioTypes);
+});
+
+check("Joonatan's live-style ['Assault bike'] and ['Bike'] produce warnings, not errors", () => {
+  const d = setCardioTypes(baseOf(ID.joonatan), [
+    { id: "assault-bike", label: "Assault bike", sports: ["Assault bike"] },
+    { id: "bike", label: "Bike", sports: ["Bike"] },
+  ]);
+  const r = validate(d);
+  assert.deepStrictEqual(r.errors, []);
+  assert.strictEqual(r.warnings.filter((w) => /not a known watch-sport code/.test(w)).length, 2);
+  assert.strictEqual(pf(ID.joonatan, "Joonatan", d).ok, true, "warnings do not block publishing");
+});
+
+check("a cardio type listing strengthTraining or yoga is an error, and publishing is blocked", () => {
+  for (const sp of ["strengthTraining", "yoga"]) {
+    const d = setCardioTypes(baseOf(ID.henna), [{ id: "gym", label: "Gym", sports: [sp] }]);
+    assert.ok(errs(d).some((e) => e.includes(sp)), sp);
+    assert.strictEqual(pf(ID.henna, "Henna", d).ok, false, sp);
+  }
+});
+
+check("sportProblem / SPORT_CHOICES agree with the validator", () => {
+  assert.strictEqual(sportProblem(""), null);
+  assert.strictEqual(sportProblem("running"), null);
+  assert.ok(sportProblem("Assault bike").warning && !sportProblem("Assault bike").error);
+  assert.ok(sportProblem("yoga").error && sportProblem("strengthTraining").error);
+  assert.ok(!SPORT_CHOICES.includes("yoga") && !SPORT_CHOICES.includes("strengthTraining"));
+  for (const c of SPORT_CHOICES) {
+    assert.ok(KNOWN_SPORTS.includes(c));
+    const r = validate({ ...baseOf(ID.henna), cardioTypes: [{ id: "t", label: "T", sports: [c] }] });
+    assert.deepStrictEqual(r.errors, [], c);
+    assert.deepStrictEqual(r.warnings.filter((w) => /watch-sport/.test(w)), [], c);
+  }
 });
 
 console.log(`\n${checks - failures} passed, ${failures} failed`);
