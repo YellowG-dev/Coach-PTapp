@@ -71,12 +71,15 @@ if(/Publish<\/button>/.test(opened)){console.log("    Publish button rendered be
 const ville="2a545525-d9a4-450c-b90b-ce04d8f48abe";
 const edRoster=[{id:ID.juha,name:"Juha"},{id:ID.henna,name:"Henna"},{id:ID.joonatan,name:"Joonatan"},{id:ville,name:"Ville"}];
 const ed=(person,defaultOpen,extra)=>renderToStaticMarkup(React.createElement(ProgrammeEditor,{person,programs,logRows:[],ownerId:person.id,onPublished:()=>{},defaultOpen,...extra}));
-const cardioBlock={[ID.juha]:"cardio/hard",[ID.henna]:"yoga/session",[ville]:"run/easy"};
+// Strength and yoga are never cardio (Phase 6), so a yoga block has no Cardio target panel.
+const cardioBlock={[ID.juha]:"cardio/hard",[ville]:"run/easy"};
+const nonCardioBlock={[ID.henna]:"yoga/session",[ID.juha]:"strength/a"};
 for(const p of edRoster){
-  let c="",o="",t="",k="";
+  let c="",o="",t="",k="",nc="";
   try{
     c=ed(p,false);o=ed(p,true);t=ed(p,true,{defaultView:"table"});
     if(cardioBlock[p.id])k=ed(p,true,{defaultSelected:cardioBlock[p.id]});
+    if(nonCardioBlock[p.id])nc=ed(p,true,{defaultSelected:nonCardioBlock[p.id]});
   }catch(e){console.log("    editor threw for "+p.name+": "+e.message);bad++;continue;}
   console.log(`  editor ${p.name.padEnd(9)} collapsed ${String(c.length).padStart(5)}  board ${String(o.length).padStart(6)}  table ${String(t.length).padStart(6)} chars`);
   if(c.length===o.length){console.log("    editor open == collapsed");bad++;}
@@ -107,6 +110,9 @@ for(const p of edRoster){
   if(!/Copies every day of Week A onto Week B/.test(o)){console.log("    copy button tooltip missing");bad++;}
   if(!/data-part="section"/.test(o)){console.log("    collapsible sections not boxed");bad++;}
   if(!/<button[^>]*disabled=""[^>]*>Check<\/button>/.test(o)){console.log("    Check not disabled with no changes");bad++;}
+  if(nc){
+    if(nc.includes("Cardio target")){console.log("    editor: a "+nonCardioBlock[p.id]+" block must not show the Cardio target panel");bad++;}
+  }
   if(k){
     if(!k.includes("Cardio target")){console.log("    editor open missing: Cardio target");bad++;}
     if(p.id!==ID.joonatan && !k.includes("Zones need a heart-rate zone table")){console.log("    editor open missing: no-zones hint");bad++;}

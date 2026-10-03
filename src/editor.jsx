@@ -7,6 +7,8 @@ import {
   addBlock, retireBlock, restoreBlock, setBlockCardio, setHrZones, standardHrZones, setCardioTypes, slugify,
   setScheduleCell, moveScheduleCell, setDayNote, copyWeek, weekFor, setOptionLabel, diffDefinitions, DOW_ORDER, DOW_NAMES,
   saveDraft, loadDraft, clearDraft, draftStatus,
+  availableStandardSlots, addStandardSlot, addSlot, slotCountsAsCardio, cardioSlots, useStandardCardioTypes,
+  SPORT_CHOICES, sportProblem,
 } from "./core/editor.js";
 import { slotMetaFor } from "./core/program-schema.js";
 import { collectLoggedIds } from "./core/validate-program.js";
@@ -159,6 +161,88 @@ function AddLabelled({ button, fieldLabel, shortLabel, onAdd }) {
   );
 }
 
+const HEX = /^#[0-9a-fA-F]{6}$/;
+
+/** "Add slot": the standard slots the programme does not have yet, plus a custom one (client-specific, like Tennis). */
+function AddSlot({ available, onStandard, onCustom }) {
+  const [pick, setPick] = useState("");
+  const [id, setId] = useState("");
+  const [label, setLabel] = useState("");
+  const [color, setColor] = useState("#8891A3");
+  const reset = () => { setPick(""); setId(""); setLabel(""); setColor("#8891A3"); };
+  const customOk = /^[a-z][a-z0-9-]{0,31}$/.test(id) && label.trim() && HEX.test(color);
+  return (
+    <div data-part="add-slot" className="mt-4 pt-3" style={{ borderTop: `1px solid ${T.border}` }}>
+      <Select
+        label="Add slot"
+        value={pick}
+        onChange={(v) => { if (v && v !== "__custom") { onStandard(v); reset(); } else setPick(v); }}
+        options={[["", "Choose a slot…"], ...available.map((s) => [s.id, s.label]), ["__custom", "Custom slot…"]]}
+      />
+      {pick === "__custom" && (
+        <div className="flex flex-wrap items-end gap-2 mt-2">
+          <Field label="Id (a–z, 0–9, -)" narrow mono value={id} onChange={(v) => setId(v.toLowerCase())} />
+          <Field label="Label" value={label} onChange={setLabel} />
+          <Field label="Colour (#rrggbb)" narrow mono value={color} onChange={setColor} invalid={!HEX.test(color)} />
+          <Btn disabled={!customOk} onClick={() => { onCustom({ id, label, color }); reset(); }}>Add slot</Btn>
+          <Btn onClick={reset}>Cancel</Btn>
+        </div>
+      )}
+      <p style={{ color: T.textMuted }} className="text-[11px] mt-1">
+        A slot is added to this programme only when you add it. A slot id is permanent: it cannot be renamed or removed.
+      </p>
+    </div>
+  );
+}
+
+/** Multi-select of watch sports for a cardio type, plus a custom-code input that shows the validator's verdict. */
+function SportPicker({ value, onChange }) {
+  const [custom, setCustom] = useState("");
+  const sports = Array.isArray(value) ? value : [];
+  const toggle = (code) => onChange(sports.includes(code) ? sports.filter((x) => x !== code) : [...sports, code]);
+  const extra = sports.filter((x) => !SPORT_CHOICES.includes(x));
+  const code = custom.trim();
+  const problem = sportProblem(code);
+  return (
+    <div className="min-w-0" data-part="sports">
+      <p style={{ color: T.textMuted }} className="text-[11px] mb-0.5">Sports</p>
+      <div className="flex flex-wrap gap-1">
+        {[...SPORT_CHOICES, ...extra].map((c) => {
+          const on = sports.includes(c);
+          const unknown = !SPORT_CHOICES.includes(c);
+          return (
+            <button
+              key={c}
+              type="button"
+              aria-pressed={on}
+              title={unknown ? sportProblem(c).warning || sportProblem(c).error : undefined}
+              onClick={() => toggle(c)}
+              style={{
+                background: on ? T.accent : T.card,
+                color: on ? T.onAccent || "#fff" : T.textSecondary,
+                border: `1px solid ${unknown ? T.warn : T.border}`,
+                fontFamily: FONT_MONO,
+              }}
+              className="text-[10px] px-1.5 py-0.5 rounded"
+            >
+              {c}{unknown ? " ⚠" : ""}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap items-end gap-2 mt-1">
+        <Field label="Custom code" mono value={custom} onChange={setCustom} invalid={Boolean(problem && problem.error)} />
+        <Btn disabled={!code || Boolean(problem && problem.error) || sports.includes(code)} onClick={() => { onChange([...sports, code]); setCustom(""); }}>Add code</Btn>
+      </div>
+      {problem && (
+        <p data-part="sport-problem" style={{ color: problem.error ? T.warn : T.textMuted }} className="text-[11px] mt-0.5">
+          {problem.error ? "✕ " + problem.error : "⚠ " + problem.warning}
+        </p>
+      )}
+    </div>
+  );
+}
+
 const getStorage = () => { try { return typeof localStorage === "undefined" ? null : localStorage; } catch (e) { return null; } };
 
 /** Weekly schedule: Week A / Week B tabs and a Monday-first grid, one dropdown per slot per day. */
@@ -294,7 +378,7 @@ const COPY_TITLE = (from, to) => `Copies every day of Week ${from} onto Week ${t
 
 /** One meta line for a library card. */
 function blockMeta(slot, b) {
-  if (slot === "strength") return `${b.exercises.length} exercise${b.exercises.length === 1 ? "" : "s"}`;
+  if (!slotCountsAsCardio(slot)) return `${b.exercises.length} exercise${b.exercises.length === 1 ? "" : "s"}`;
   const c = b.cardio || {};
   const parts = [];
   if (c.durationMin !== undefined && c.durationMin !== "") parts.push(`${c.durationMin} min`);
@@ -365,6 +449,11 @@ function Library({ ed, sel, onSelect, onDragStart, onDragEnd }) {
           </div>
         );
       })}
+      <AddSlot
+        available={availableStandardSlots(draft)}
+        onStandard={(id) => apply((d) => addStandardSlot(d, id))}
+        onCustom={(spec) => apply((d) => addSlot(d, spec))}
+      />
     </div>
   );
 }
@@ -624,7 +713,7 @@ function BlockEditor({ ed, slot, b, blocks }) {
             onExisting={(entry) => apply((d) => addExistingExercise(d, slot, b.key, entry))}
             onNew={(f) => apply((d) => addNewExercise(d, slot, b.key, f, takenIds()))}
           />
-          {slot !== "strength" && (
+          {slotCountsAsCardio(slot) && (
             <div style={{ borderColor: T.border }} className="border-t mt-3 pt-2">
               <p style={{ color: T.textSecondary }} className="text-[11px] font-bold">Cardio target</p>
               <div className="flex flex-wrap gap-2 mt-1">
@@ -755,7 +844,8 @@ function PublishPanel({ ed }) {
 
       <Section title="Cardio types">
         <p style={{ color: T.textMuted }} className="text-[11px] mt-0.5">
-          The list for extra cardio. Sports are comma-separated; a slot means a workout of that sport satisfies the planned slot.
+          The list for extra cardio. Sports are the codes a watch reports; a slot means a workout of that sport satisfies the planned slot.
+          Only cardio slots can be linked: strength and yoga are never cardio.
         </p>
         {(draft.cardioTypes || []).map((t, i) => {
           const upd = (patch) => apply((d) => setCardioTypes(d, d.cardioTypes.map((x, j) => (j === i ? { ...x, ...patch } : x))));
@@ -763,12 +853,26 @@ function PublishPanel({ ed }) {
             <div key={t.id + i} className="flex flex-wrap items-end gap-2 mt-1">
               <p style={{ color: T.textMuted, fontFamily: FONT_MONO }} className="text-[10px] w-16 pb-1.5">{t.id}</p>
               <Field label="Label" value={t.label || ""} onChange={(v) => upd({ label: v })} />
-              <Field label="Sports" value={(t.sports || []).join(", ")} onChange={(v) => upd({ sports: v.split(",") })} />
-              <Select label="Slot" narrow value={t.slot || ""} onChange={(v) => upd({ slot: v })} options={[["", "— extras only"], ...(draft.slots || []).map((sl) => [sl, sl])]} />
+              <SportPicker value={t.sports} onChange={(sports) => upd({ sports })} />
+              <Select
+                label="Slot"
+                narrow
+                value={t.slot || ""}
+                onChange={(v) => upd({ slot: v })}
+                options={[
+                  ["", "— extras only"],
+                  ...cardioSlots(draft).map((sl) => [sl, sl]),
+                  // A link to a non-cardio slot is kept visible rather than silently dropped.
+                  ...(t.slot && !slotCountsAsCardio(t.slot) ? [[t.slot, t.slot + " (not cardio)"]] : []),
+                ]}
+              />
               <Btn onClick={() => apply((d) => setCardioTypes(d, d.cardioTypes.filter((_, j) => j !== i)))}>Remove</Btn>
             </div>
           );
         })}
+        <div className="mt-2">
+          <Btn onClick={() => apply((d) => useStandardCardioTypes(d))}>Use standard cardio types</Btn>
+        </div>
         <AddLabelled
           button="Add cardio type"
           fieldLabel="New type label"

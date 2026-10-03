@@ -1,0 +1,22 @@
+  ok   Henna's library starts with Strength and Yoga only
+  ok   the Add slot picker lists the standard slots Henna lacks, plus Custom slot…
+  ok   Walk appears in the library with its catalogue colour
+  ok   the Walk swatch is #C9D46B
+  ok   Walk is no longer offered once added
+  ok   the new block shows in the library under Walk
+  ok   Easy walk is on the board on Tue and Thu (Week A)
+  ok   Check is enabled once there are changes
+  ok   Check passes: the Publish button is offered and nothing is blocking
+  ok   the change list names the new slot, the block and the placements
+  ok   Use standard cardio types fills Run, Walk, Swim, Bike and Cardio (5 sports pickers)
+  ok   each Slot dropdown lists only cardio slots (never strength or yoga) and the types are linked: Walk → walk, others extras-only
+  ok   a custom code that is not a known sport shows the validator's warning
+  ok   a yoga / strength code shows the validator's error and cannot be added
+  ok   an unknown code can still be added (a warning, not a block); its chip is flagged
+  ok   the sport choices do not offer yoga or strengthTraining
+  ok   Check still passes with the unknown code (warning only)
+  ok   a Walk block shows the Cardio target panel
+  ok   a strength block shows no Cardio target panel
+  ok   no page errors
+
+phase 6 coach browser check: 20 passed, 0 failed

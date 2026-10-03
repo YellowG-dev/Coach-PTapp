@@ -23,7 +23,7 @@
 import { dateKey, getWeekMonday } from "./dates.js";
 import { resolveSchedule } from "./engine.js";
 import { recordedWorkouts, dedupe, weeklyCardioMinutes, isCardioActivity } from "./cardio.js";
-import { resolveForDate, slotOptionsFor, blocksFor } from "./program-schema.js";
+import { resolveForDate, slotOptionsFor, blocksFor, NON_CARDIO_SLOTS } from "./program-schema.js";
 import { indexByDay } from "./adherence.js";
 import { collapseDays } from "./recovery.js";
 import { labelFor } from "./shape.js";
@@ -200,7 +200,7 @@ function cardioMetric(ctx) {
     const d = addDays(monday, i);
     const def = resolver(d);
     for (const slot of def.slots || []) {
-      if (slot === "strength") continue;
+      if (NON_CARDIO_SLOTS.includes(slot)) continue; // strength and yoga never declare cardio
       const blocks = blocksFor(def, slot);
       if (Object.values(blocks).some((b) => b && b.cardio)) declares = true;
     }

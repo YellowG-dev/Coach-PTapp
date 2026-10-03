@@ -8,9 +8,11 @@
 // zones and cardio types. Anything not named here — schedule, testing, daily,
 // mobility, tracking, slotMeta, programView, … — passes through untouched.
 // (3c): the weekly schedule, picker labels, a change list, and draft storage.
+// (Phase 6): add a slot from the standard catalogue (or a custom one), cardio-type
+// helpers. A slot is never renamed or removed.
 // Blocks are never deleted: a retired block stays in `blocks` so history resolves.
 
-import { resolveForDate } from "./program-schema.js";
+import { resolveForDate, STANDARD_SLOTS, NON_CARDIO_SLOTS, KNOWN_SPORTS } from "./program-schema.js";
 import { getISOWeek } from "./dates.js";
 
 export const BLOCK_FIELDS = ["label", "subtitle", "gentlerNote", "noGym"];
@@ -258,6 +260,70 @@ export function moveExercise(def, slot, blockKey, exId, delta) {
   return out;
 }
 
+/* ---------------------------- Phase 6: slots ------------------------------- */
+
+const SLOT_ID = /^[a-z][a-z0-9-]{0,31}$/;
+const SLOT_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+/** The catalogue slots this programme does not have yet, in catalogue order. */
+export function availableStandardSlots(def) {
+  const have = new Set(Array.isArray(def && def.slots) ? def.slots : []);
+  return STANDARD_SLOTS.filter((s) => !have.has(s.id));
+}
+
+/** Does this slot count toward the weekly cardio total? Strength and yoga do not; every other slot, standard or custom, does. */
+export function slotCountsAsCardio(slot) {
+  return !NON_CARDIO_SLOTS.includes(slot);
+}
+
+/** The slots of a programme that count as cardio — the ones a cardio type may link to. */
+export function cardioSlots(def) {
+  return (Array.isArray(def && def.slots) ? def.slots : []).filter(slotCountsAsCardio);
+}
+
+/**
+ * Appends a slot. `spec` is `{ id, label, color }`: for a standard slot pass
+ * `standardSlotSpec(id)`, for a client-specific one (Juha's tennis) whatever the
+ * coach typed. Writes `slots`, `slotMeta[id]`, `blocks[id] = {}` and
+ * `slotOptions[id] = [{ label: "None", value: null }]`, so the slot validates the
+ * moment it exists and "+ Add block" works on it straight away.
+ *
+ * An existing id throws: ids are permanent (logged history resolves through
+ * them), so a slot can be added but never renamed or replaced. Removing a slot
+ * is deliberately not an operation.
+ */
+export function addSlot(def, spec) {
+  const id = spec && typeof spec.id === "string" ? spec.id : "";
+  const label = spec && typeof spec.label === "string" ? spec.label.trim() : "";
+  const color = spec && typeof spec.color === "string" ? spec.color : "";
+  if (!SLOT_ID.test(id)) throw new Error("A slot id is lowercase letters, digits and '-', starting with a letter, up to 32 characters");
+  if (!label) throw new Error("A slot needs a label");
+  if (!SLOT_COLOR.test(color)) throw new Error("A slot colour must be a #rrggbb hex value");
+  const out = clone(def);
+  const slots = Array.isArray(out.slots) ? out.slots : (out.slots = []);
+  const taken = (m) => m && Object.prototype.hasOwnProperty.call(m, id);
+  if (slots.includes(id) || taken(out.blocks) || taken(out.slotMeta) || taken(out.slotOptions)) {
+    throw new Error(`Slot ${id} already exists and cannot be added again`);
+  }
+  slots.push(id);
+  out.slotMeta = { ...(out.slotMeta || {}), [id]: { label, color } };
+  out.blocks = { ...(out.blocks || {}), [id]: {} };
+  out.slotOptions = { ...(out.slotOptions || {}), [id]: [{ label: "None", value: null }] };
+  return out;
+}
+
+/** `{ id, label, color }` for a catalogue slot, ready for addSlot. */
+export function standardSlotSpec(id) {
+  const s = STANDARD_SLOTS.find((x) => x.id === id);
+  if (!s) throw new Error(`${id} is not a standard slot`);
+  return { id: s.id, label: s.label, color: s.color };
+}
+
+/** Standard slot, by id: the picker's common case. */
+export function addStandardSlot(def, id) {
+  return addSlot(def, standardSlotSpec(id));
+}
+
 /* -------------------------------- 3b: blocks ------------------------------- */
 
 const optionsOf = (def, slot) => {
@@ -364,6 +430,42 @@ export function setCardioTypes(def, types) {
   if (list.length) out.cardioTypes = list;
   else delete out.cardioTypes;
   return out;
+}
+
+/**
+ * The "Use standard cardio types" button: Run, Walk, Bike, Swim and Cardio from
+ * the catalogue. Each is linked to its slot when the programme has that slot,
+ * otherwise extras-only. Types the programme already has are kept as they are
+ * (matched by id), so pressing the button never overwrites the coach's edits.
+ */
+export function useStandardCardioTypes(def) {
+  const have = new Set(Array.isArray(def && def.slots) ? def.slots : []);
+  const existing = Array.isArray(def && def.cardioTypes) ? def.cardioTypes : [];
+  const ids = new Set(existing.map((t) => t && t.id));
+  const added = STANDARD_SLOTS
+    .filter((s) => s.countsAsCardio && s.id !== "strength" && !ids.has(s.id))
+    .map((s) => (have.has(s.id) ? { id: s.id, label: s.label, sports: [...s.sports], slot: s.id } : { id: s.id, label: s.label, sports: [...s.sports] }));
+  return setCardioTypes(def, [...existing, ...added]);
+}
+
+/**
+ * Sport codes the editor offers in its multi-select. Strength and yoga sports are
+ * left out: the validator rejects them as cardio types. A code outside the list is
+ * a custom one, which the validator warns about.
+ */
+export const SPORT_CHOICES = KNOWN_SPORTS.filter((c) => !STANDARD_SLOTS.some((s) => !s.countsAsCardio && s.sports.includes(c)));
+
+/** What the validator would say about a typed sport code: `{ error }`, `{ warning }` or null. Same wording as program-schema.js. */
+export function sportProblem(code) {
+  const c = String(code === undefined || code === null ? "" : code).trim();
+  if (!c) return null;
+  if (STANDARD_SLOTS.some((s) => !s.countsAsCardio && s.sports.includes(c))) {
+    return { error: `"${c}" is not cardio — strength and yoga are never cardio types` };
+  }
+  if (!KNOWN_SPORTS.includes(c)) {
+    return { warning: `"${c}" is not a known watch-sport code — it will only match if a watch reports exactly that` };
+  }
+  return null;
 }
 
 /* ---------------------------- 3c: weekly schedule --------------------------- */
