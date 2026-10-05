@@ -1,4 +1,7 @@
-# Coach · Overview polish — tab bar and "Recovery vs baseline"
+# Coach · Overview polish and Training log redesign
+
+Three parts, one session: §1 tab bar, §2 "Recovery vs baseline",
+§4 Training log (week grid + day card). Updated 5 Oct evening to add §4.
 
 Status: **READY.** Written 5 Oct 2026 from live `main` (Coach 0.12.1,
 `b8c88b1`). Coach only; no client repo, no shared file, no Supabase.
@@ -55,7 +58,8 @@ nights marked, and a one-line verdict.
 - `verify-overview.mjs` ~line 10 and 83 import and call `recoveryBars`.
 
 These are the **only** existing expectations this brief allows to change,
-and only as §2 says. Any other check that changes result → stop.
+and only as §2 says. §4 changes no existing expectation: `DayCard` keeps
+its name and props, and every current `verify-render` check must still pass. Any other check that changes result → stop.
 
 ## Scope
 
@@ -136,10 +140,114 @@ position and size as today:
 
 `COACH_VERSION` → `0.12.2`, `?v=` → `0.12.2`, `npm run build`.
 
+### 4. Training log: week grid on top, selected day's card below
+
+**Decision (John, 5 Oct 2026):** the Training log tab becomes a week grid
+(design B) with, beneath it, the day card (design A) for the day selected in
+the grid. Reference mockup, built from Juha's real 28 Sep – 4 Oct data:
+`briefs/design/training-log-combined.dc.html` (open it in a browser; it is
+static HTML with inline styles). Match its layout, hierarchy and colours
+using `T` tokens. Values in `[square brackets]` in the mockup are
+placeholders the code computes.
+
+**Facts (verified 5 Oct):**
+- `src/app.jsx` `PersonPanel`, `tab === "log"` (~line 505): renders
+  `Adherence` then a paged list of `DayCard`s (`PAGE = 20`) with "Show
+  earlier days".
+- `DayCard({ day, scored, names })` (~line 913) uses `shapeDay` /
+  `shapeOverride` from `src/core/shape.js`. `shapeDay` returns `exercises`,
+  `checks`, `ticked`, `measurements`, `notes` and more.
+- `scored` (from `pctByDay`) carries `pct`, `doneCount`, `total`, `skip`.
+- `verify-render.mjs` renders `Adherence` and `DayCard` with
+  `{ day, scored, names }` and checks: the % badge text is present, and no raw
+  ID (`up-`, `lo-`, `mob-`) leaks into the markup. `verify-adherence.mjs`
+  checks the exports `PersonPanel`, `DayCard`, `Adherence` exist.
+- Today the card prints internal keys, e.g. "dismissedWorkouts set to
+  oura:…" and "cardio cleared".
+
+**Build:**
+
+a. **Pure function** `logWeek(...)` in a new `src/core/logweek.js`, from
+   the data `PersonPanel` already has (log rows, override rows, programme
+   versions, names; wearable workouts if available in `ctx`). One week
+   (Mon–Sun) → per day:
+   - `session`: label of the scheduled/done block(s), from the version in
+     force on that day (`resolveVersion` + `resolveSchedule`), or "Cleared"
+     on a skip day, or "No session";
+   - `exercisesLogged` / `exercisesPlanned` for strength blocks (logged = has
+     sets; ticked-without-sets and not-done listed separately);
+   - `sets`, `volumeKg` (Σ reps × kg over logged sets);
+   - `mobility` ticked / list length (`mobilityFor`);
+   - `kcal`, `protein`, `carbs`, `fat` with that day's target from
+     `nutritionTargets` by day type (`isTrainingDay` of the version in
+     force), and the difference;
+   - `weigh`, `knee`/scales, `alcohol` units, `note` (present or not);
+   - `adherence` = the existing `pctByDay` entry.
+   Plus week totals: sessions, sets, volume, confirmed cardio minutes
+   (`weeklyCardioMinutes`), average kcal, protein days on target, weigh-in
+   first → last and its change.
+   Never estimate a missing value: missing → `null` → shown as "—".
+
+b. **Colour rules** (approved: "as in the mockup"), in ONE exported object
+   in `logweek.js` so they can be tuned later:
+   - calories: within ±10 % of that day's target → on target; else off;
+   - protein: ≥ target → on; more than 10 % below → off; else neutral;
+   - mobility: ≥ 60 % of the list → on; ≤ 30 % → off; else neutral;
+   - exercises logged: ≥ 80 % of planned → on; < 70 % → off; else neutral;
+   - alcohol: > 0 → off;
+   - weigh-in, knee, sets/volume: never coloured.
+   On = `T.good` text on the existing `T.doneBg`; off = `T.warn` text on a
+   tint from tokens (add one `T` token if needed, report it); neutral =
+   `T.panel`. The legend in the mockup explains the three.
+
+c. **`LogWeek` component** (top): week navigation (‹ › and the week's
+   dates; default the current week), the five summary tiles, the grid
+   (rows: Session, Exercises logged, Sets · volume, Mobility, Calories vs
+   target, Protein, Weigh-in, Knee · alcohol, Note). Each day column is a
+   real `<button>` (keyboard reachable) that selects the day; the selected
+   column has the accent outline and header underline. Default selection:
+   today if it has data, else the latest day in the week with data. At
+   narrow width the grid scrolls sideways in its own box.
+
+d. **`DayCard`** (below, for the selected day) is redesigned to design A:
+   date block, session title with category colour, "x of y exercises
+   logged · …", adherence bar + `pct · done/total`, the six-tile results
+   strip, the exercise table (sets as pills, top set, "vs last time"), then
+   "Ticked, no sets" and "Not done", then the note as a quote.
+   - **Keep the export name `DayCard` and its props** `{ day, scored, names }`
+     (new props optional), so `verify-render` keeps working unchanged.
+   - "vs last time": the most recent EARLIER logged day with sets for the
+     same exercise id; compare top set (heaviest kg, then most reps): show
+     "▲ +x kg", "▲ +x reps", "=", or "▼ …"; none earlier → "first log".
+   - Plain words only: a cleared slot reads "Zone 2 cleared" (block label),
+     dismissed watch workouts are not shown, substitutions read
+     "Cable curl — for Ez-bar curl".
+   - Skip day: "Cleared — <reason>" title and no exercise table.
+
+e. **Remove** the long paged list of day cards from this tab; earlier days
+   are reached with the week arrows. Keep `Adherence` (30-day / all-time
+   summary) above the grid, compacted to one line if it fits.
+
+**Tests:**
+- New `verify-logweek.mjs`: Juha fixture week(s) — per-day values match a
+  hand computation in the test (sets, volume, kcal difference vs the right
+  day-type target, mobility count); missing values are `null`; each colour
+  rule's boundaries (exactly 10 %, exactly 60 %/30 %, 80 %/70 %); "vs last
+  time" for up, same, down and first log; a skip day; a day logged against
+  an older programme version uses that version's target and exercises.
+- `verify-render.mjs`: unchanged checks must still pass; add a render of
+  `LogWeek` for one Juha fixture week (no raw IDs, every day column present).
+- Browser check (same folder as §2): Training log at 1440×900 — grid and
+  card render; clicking another day column changes the card; ‹ › change the
+  week; 390×844 — grid scrolls in its box, card stacks; screenshots.
+
 ## Out of scope
 
 - Client repos, shared files, Supabase.
-- The four metric boxes, week grid, Needs attention, Recent sessions.
+- On Overview: the four metric boxes, the "This week" grid, Needs attention,
+  Recent sessions.
+- The Training log's data rules (adherence scoring, `shapeDay`): §4 reads
+  them, never changes them.
 - Progress tab charts.
 - Any change to `buildRecovery`.
 
