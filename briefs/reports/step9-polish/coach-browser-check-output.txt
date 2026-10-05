@@ -1,0 +1,15 @@
+  ok   the Versions tab lists the mocked future version
+  ok   Delete version is offered on exactly the two future rows (tomorrow, November)
+  ok   offered on henna-2026-11 (effective 2026-11-02)
+  ok   offered on a version effective tomorrow
+  ok   the version effective today is the one in force
+  ok   not offered on the in-force version (effective today)
+  ok   not offered on past versions
+  ok   the confirm names the id and the date
+  ok   nothing is sent before Confirm
+  ok   Confirm sends the guarded delete: programs, id, effective_from > today
+  ok   the version list is reloaded after the delete
+  ok   the deleted row is gone from the table
+  ok   no page errors
+
+step9-polish coach browser check: 13 passed, 0 failed

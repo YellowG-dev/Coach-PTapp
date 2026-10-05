@@ -156,5 +156,14 @@ console.log("\n--- Phase 4: the three programView definitions, merged into the f
   }
 }
 
+console.log("\n--- Step 9 polish: every fixture row (all live versions) validates under program-schema.js ---");
+{
+  const rows = JSON.parse(readFileSync("fixtures/programs.json", "utf8"));
+  check("fixture holds all 11 live versions", rows.length, 11);
+  for (const row of rows) {
+    check(`${row.id}: 0 schema errors`, validateSchema(row.definition).errors, []);
+  }
+}
+
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : failures + " CHECK(S) FAILED"}`);
 process.exit(failures === 0 ? 0 : 1);

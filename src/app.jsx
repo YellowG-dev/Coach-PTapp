@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
-import { loadAll, insertProgramVersion } from "./core/data.js";
+import { loadAll, insertProgramVersion, deleteFutureVersion, canDeleteVersion } from "./core/data.js";
 import { preflight } from "./core/publish.js";
 import { CheckResult } from "./check-result.jsx";
 import { ProgrammeEditor } from "./editor.jsx";
@@ -545,7 +545,7 @@ export function PersonPanel({ tab = "overview", person, days, total, adherence, 
 
       {tab === "versions" && (
         <>
-          <VersionsTable person={person} programs={programs} />
+          <VersionsTable person={person} programs={programs} onDeleted={onPublished} />
           <Publisher
             person={person}
             programs={programs}
@@ -560,7 +560,18 @@ export function PersonPanel({ tab = "overview", person, days, total, adherence, 
   );
 }
 
-function VersionsTable({ person, programs }) {
+function VersionsTable({ person, programs, onDeleted }) {
+  const [pending, setPending] = useState(null); // id awaiting confirmation
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, text }
+  const doDelete = async (r) => {
+    setBusy(true);
+    const res = await deleteFutureVersion(r.id);
+    setBusy(false);
+    setPending(null);
+    setMsg(res.ok ? { ok: true, text: `Deleted ${r.id} (effective ${fromLabel(r.effective_from)}).` } : { ok: false, text: "✕ " + res.error });
+    if (res.ok && onDeleted) onDeleted();
+  };
   const rows = programs
     .filter((r) => r.assigned_to === person.id)
     .slice()
@@ -594,11 +605,41 @@ function VersionsTable({ person, programs }) {
               <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{r.id}</td>
               <td className="py-1.5 pr-3">{r.name}</td>
               <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{fromLabel(r.effective_from)}</td>
-              <td className="py-1.5">{inForce && inForce.id === r.id && <Tag tone="good">in force</Tag>}</td>
+              <td className="py-1.5">
+                {inForce && inForce.id === r.id && <Tag tone="good">in force</Tag>}
+                {canDeleteVersion(r) && pending !== r.id && (
+                  <button
+                    type="button"
+                    data-action="delete-version"
+                    disabled={busy}
+                    onClick={() => { setMsg(null); setPending(r.id); }}
+                    style={{ borderColor: T.warn, color: T.warn }}
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2"
+                  >
+                    Delete version
+                  </button>
+                )}
+                {pending === r.id && (
+                  <span data-part="delete-confirm" style={{ color: T.warn }} className="text-[11px] inline-flex flex-wrap items-center gap-2">
+                    Delete {r.id}, effective {fromLabel(r.effective_from)}? It has not started; nothing has been scored against it.
+                    <button type="button" data-action="delete-confirm" disabled={busy} onClick={() => doDelete(r)}
+                            style={{ borderColor: T.warn, color: T.warn }}
+                            className="font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2">
+                      {busy ? "Deleting…" : "Confirm"}
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => setPending(null)}
+                            style={{ borderColor: T.border, color: T.textSecondary }}
+                            className="font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2">
+                      Cancel
+                    </button>
+                  </span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {msg && <p style={{ color: msg.ok ? T.good : T.warn }} className="text-[11px] mt-2">{msg.text}</p>}
     </div>
   );
 }

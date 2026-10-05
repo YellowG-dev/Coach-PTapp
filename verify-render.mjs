@@ -115,7 +115,11 @@ for(const p of edRoster){
   }
   if(k){
     if(!k.includes("Cardio target")){console.log("    editor open missing: Cardio target");bad++;}
-    if(p.id!==ID.joonatan && !k.includes("Zones need a heart-rate zone table")){console.log("    editor open missing: no-zones hint");bad++;}
+    // The hint shows only when the version the editor drafts from has no zone table.
+    const mine=programs.filter(r=>r.assigned_to===p.id).sort((a,b)=>String(a.effective_from)<String(b.effective_from)?-1:1);
+    const baseHasZones=Boolean(mine.length&&mine[mine.length-1].definition.hrZones);
+    const hint=k.includes("Zones need a heart-rate zone table");
+    if(hint===baseHasZones){console.log("    editor: no-zones hint "+(hint?"shown although the base version has zones":"missing although the base version has none"));bad++;}
   }
   if(/Publish<\/button>/.test(o)){console.log("    editor Publish button before any check");bad++;}
 }

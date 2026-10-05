@@ -55,7 +55,9 @@ check("round trip: every fixture row → startDraft → deep-equal", () => {
 
 check("startDraft picks the version in force on the date", () => {
   assert.strictEqual(draftOf(ID.juha, "2026-09-10").baseId, "juha-2026-09");
-  assert.strictEqual(draftOf(ID.juha, "2026-10-01").baseId, "juha-2026-09-23");
+  assert.strictEqual(draftOf(ID.juha, "2026-09-28").baseId, "juha-2026-09-23");
+  assert.strictEqual(draftOf(ID.juha, "2026-09-30").baseId, "juha-2026-09-29");
+  assert.strictEqual(draftOf(ID.juha, "2026-10-01").baseId, "juha-2026-10");
 });
 
 check("startDraft with no version in force returns null draft and a reason", () => {

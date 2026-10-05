@@ -1,0 +1,17 @@
+  ok   A: the ride is offered as a watch workout before confirming
+  ok   A: before confirming, no Rearranged badge today
+  ok   A: confirming writes one source:wearable activity today and no slot keys
+  ok   A: Extra Activity section shows 'From your watch'
+  ok   A: and not 'Added from Calendar'
+  ok   A: no Rearranged badge after confirming the watch workout
+  ok   A: Calendar border for today (watch extra only) is solid
+  ok   A: Calendar border for tomorrow (slot moved) is dashed
+  ok   A: no page errors
+  ok   B: moved slot today → Rearranged badge
+  ok   B: Calendar border for today is dashed
+  ok   B: no page errors
+  ok   C: mixed extras → 'From Calendar and your watch'
+  ok   C: extras only → no Rearranged badge
+  ok   C: no page errors
+
+step9-polish client browser check: 15 passed, 0 failed
