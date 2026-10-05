@@ -9,7 +9,11 @@ import {
   resolveKpiIds,
   weekPlan,
   recentSessions,
-  recoveryBars,
+  recoveryBaseline,
+  fmtBaselineValue,
+  fmtBaselineDelta,
+  WEEK_NIGHTS,
+  BASELINE_MIN,
   needsAttention,
 } from "./core/overview.js";
 import { THEME as T, FONT_DISPLAY, FONT_MONO } from "./config.jsx";
@@ -237,40 +241,161 @@ function Sessions({ ctx }) {
   );
 }
 
-function Bars({ ctx }) {
-  const rows = recoveryBars(ctx.recovery);
+const STATUS_COLOUR = { normal: () => T.textSecondary, better: () => T.good, worse: () => T.warn };
+const SPARK_W = 240;
+const SPARK_H = 36;
+
+/** "4.10." style, matching the other day labels in this tab. */
+const shortDay = (key) => {
+  const [, mo, d] = key.split("-").map(Number);
+  return `${d}.${mo}.`;
+};
+
+/** Runs of consecutive non-null nights as SVG path strings; a null night breaks the line. */
+function linePaths(points) {
+  const paths = [];
+  let cur = [];
+  points.forEach((p) => {
+    if (p == null) {
+      if (cur.length) paths.push(cur);
+      cur = [];
+    } else cur.push(p);
+  });
+  if (cur.length) paths.push(cur);
+  return paths.map((run) => run.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" "));
+}
+
+function Spark({ row }) {
+  const { nights, baseline, outside } = row;
+  const vals = nights.filter((n) => n.value != null).map((n) => n.value);
+  let lo = Math.min(...vals, baseline ? baseline.lo : Infinity);
+  let hi = Math.max(...vals, baseline ? baseline.hi : -Infinity);
+  if (!(hi > lo)) {
+    lo -= 1;
+    hi += 1;
+  }
+  const pad = (hi - lo) * 0.08;
+  lo -= pad;
+  hi += pad;
+  const x = (i) => (i / (nights.length - 1)) * SPARK_W;
+  const y = (v) => SPARK_H - ((v - lo) / (hi - lo)) * SPARK_H;
+  const pts = nights.map((n, i) => (n.value == null ? null : [x(i), y(n.value)]));
+  const split = nights.length - WEEK_NIGHTS;
+  // The older line runs one night into the last week so the two meet.
+  const older = linePaths(pts.map((p, i) => (i <= split ? p : null)));
+  const recent = linePaths(pts.map((p, i) => (i >= split ? p : null)));
+  const dots = outside.map((o) => ({ ...o, i: nights.findIndex((n) => n.day === o.day) }));
+  const status = row.week ? row.week.status : null;
+  const aria = `${row.label}, last 30 nights${
+    baseline ? `, 7-night average ${row.week ? row.week.status : "not available"} against your normal range` : ", building baseline"
+  }`;
   return (
-    <Card title="Recovery · 7 nights">
-      {!rows ? (
+    <svg
+      role="img"
+      aria-label={aria}
+      data-status={status || "none"}
+      viewBox={`0 0 ${SPARK_W} ${SPARK_H}`}
+      preserveAspectRatio="none"
+      className="block w-full"
+      style={{ height: SPARK_H, overflow: "visible" }}
+    >
+      {baseline && (
+        <>
+          <rect x="0" y={y(baseline.hi)} width={SPARK_W} height={Math.max(0, y(baseline.lo) - y(baseline.hi))} fill={T.textMuted} fillOpacity="0.18" />
+          <line x1="0" x2={SPARK_W} y1={y(baseline.mean)} y2={y(baseline.mean)} stroke={T.textMuted} strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />
+        </>
+      )}
+      {older.map((d, i) => (
+        <path key={"o" + i} d={d} fill="none" stroke={T.textMuted} strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      ))}
+      {recent.map((d, i) => (
+        <path key={"r" + i} d={d} fill="none" stroke={T.textPrimary} strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      ))}
+      {/* Zero-length round-capped lines stay circular however the box is stretched. */}
+      {dots.map((o) => (
+        <line
+          key={o.day}
+          data-dot={o.better ? "better" : "worse"}
+          x1={x(o.i)}
+          x2={x(o.i)}
+          y1={y(o.value)}
+          y2={y(o.value)}
+          stroke={o.better ? T.good : T.warn}
+          strokeWidth="6"
+          strokeLinecap="round"
+          vectorEffect="non-scaling-stroke"
+        />
+      ))}
+    </svg>
+  );
+}
+
+function Bars({ ctx }) {
+  const data = recoveryBaseline(ctx.recovery);
+  const last = data ? data.rows[data.rows.length - 1] : null;
+  const named = data && /^Below normal/.test(data.verdict);
+  return (
+    <Card title="Recovery vs baseline">
+      {!data ? (
         <p style={{ color: T.textMuted }} className="text-xs">
           No wearable data.
         </p>
       ) : (
-        <div className="space-y-2">
-          {rows.map((r) => (
-            <div key={r.id} className="flex items-center gap-2">
-              <span style={{ color: T.textSecondary }} className="text-[11px] w-20 shrink-0">
-                {r.label}
-              </span>
-              <span className="flex-1 flex items-end gap-1 h-6" aria-hidden="true">
-                {r.values.map((v, i) => (
-                  <span
-                    key={i}
-                    style={{
-                      background: v == null ? "transparent" : T.accentAlt,
-                      borderColor: T.border,
-                      height: v == null ? "100%" : Math.max(8, Math.round((v / r.max) * 100)) + "%",
-                    }}
-                    className={"flex-1 rounded-sm " + (v == null ? "border border-dashed" : "")}
-                  />
-                ))}
-              </span>
-              <span style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-[11px] w-12 text-right shrink-0">
-                {r.latest == null ? "—" : r.latest + (r.unit || "")}
-              </span>
-            </div>
-          ))}
-        </div>
+        <>
+          <p style={{ color: named ? T.warn : T.textSecondary }} className="text-xs mb-2">
+            {data.verdict}
+          </p>
+          <div className="space-y-2.5">
+            {data.rows.map((r) => (
+              <div key={r.id} className="flex items-center gap-2" data-metric={r.id}>
+                <span style={{ color: T.textSecondary }} className="text-[11px] w-16 shrink-0">
+                  {r.label}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <Spark row={r} />
+                </span>
+                <span className="w-32 shrink-0 text-right leading-tight">
+                  <span style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="block text-[12px]">
+                    {r.latest == null ? "—" : fmtBaselineValue(r.id, r.latest) + (r.unit ? " " + r.unit : "")}
+                  </span>
+                  {r.baseline ? (
+                    <>
+                      {r.week ? (
+                        <>
+                          <span style={{ color: STATUS_COLOUR[r.week.status]() }} className="block text-[10px]">
+                            {WEEK_NIGHTS}-night {fmtBaselineDelta(r.id, r.week.delta)} vs normal
+                          </span>
+                          <span className="block text-[10px]">
+                            {r.week.status !== "normal" && <span style={{ color: STATUS_COLOUR[r.week.status]() }}>{r.week.status} · </span>}
+                            <span style={{ color: T.textMuted }}>
+                              normal {fmtBaselineValue(r.id, r.baseline.lo)}–{fmtBaselineValue(r.id, r.baseline.hi)}
+                            </span>
+                          </span>
+                        </>
+                      ) : (
+                        <span style={{ color: T.textMuted }} className="block text-[10px]">
+                          No readings in {WEEK_NIGHTS} nights · normal {fmtBaselineValue(r.id, r.baseline.lo)}–{fmtBaselineValue(r.id, r.baseline.hi)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ color: T.textMuted }} className="block text-[10px]">
+                      Building baseline ({r.n}/{BASELINE_MIN})
+                    </span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 mt-1" aria-hidden="true">
+            <span className="w-16 shrink-0" />
+            <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="flex-1 flex justify-between text-[10px]">
+              <span>{shortDay(last.nights[0].day)}</span>
+              <span>{shortDay(last.nights[last.nights.length - 1].day)}</span>
+            </span>
+            <span className="w-32 shrink-0" />
+          </div>
+        </>
       )}
     </Card>
   );

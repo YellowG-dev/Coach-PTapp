@@ -159,22 +159,17 @@ for (const [W_, H_] of [[1440, 900], [1366, 768]]) {
     if (!sb.btns.some((t) => /Kalle.*paused/.test(t))) fail("paused marker missing");
   }
 
-  // training log
+  // training log — the R3 day-card measurement retired 5 Oct 2026 (the card was
+  // replaced by the week grid + day card); verify-browser-overview.mjs checks
+  // the new log in depth. Here only: the tab still renders and the page does
+  // not scroll sideways.
   {
     await go(ID.juha, "log");
-    const m = await page.evaluate(() => {
-      const card = [...document.querySelectorAll("main .rounded-2xl")].find((c) => /Measurements/.test(c.textContent) && c.className.includes("max-w-"));
-      const label = [...card.querySelectorAll("p")].find((p) => p.textContent === "Measurements").nextElementSibling.querySelector("span");
-      const value = label.parentElement.lastElementChild;
-      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-      const l = label.getBoundingClientRect(), v = value.getBoundingClientRect();
-      return { labelLeft: Math.round(l.left), valueLeft: Math.round(v.left), valueRight: Math.round(v.right), labelRight: Math.round(l.right), rem, cardW: Math.round(card.getBoundingClientRect().width), label: label.textContent, value: value.textContent, maxW: getComputedStyle(card).maxWidth };
-    });
-    const span = m.valueLeft - m.labelLeft; // label's left edge to where its value starts
-    report[tag]["log measurements"] = { ...m, spanRem: +(span / m.rem).toFixed(2) };
-    console.log(`  ${tag} log: "${m.label}" → "${m.value}" label-left to value-left ${span}px = ${(span / m.rem).toFixed(1)}rem (limit 18rem); card ${m.cardW}px, max-width ${m.maxW}`);
-    if (span >= 18 * m.rem) fail("label and value are 18rem or more apart");
-    if (m.maxW !== "1152px") fail("day card max-width is not 72rem");
+    const m = await page.evaluate(() => ({ cols: document.querySelectorAll("main button[aria-pressed], main [data-logweek] button").length, text: document.querySelector("main")?.textContent || "", pageScroll: document.documentElement.scrollWidth, innerWidth: window.innerWidth }));
+    report[tag]["log"] = { cols: m.cols, pageScroll: m.pageScroll };
+    console.log(`  ${tag} log: ${m.cols} day buttons, page ${m.pageScroll}/${m.innerWidth}`);
+    if (m.pageScroll > m.innerWidth) fail("training log scrolls horizontally");
+    if (!/Training log|Week/.test(m.text)) fail("training log did not render");
     await shot("training-log-juha-1440", 1300);
   }
 

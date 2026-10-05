@@ -1,0 +1,229 @@
+{
+ "1440x900": {
+  "tabs": {
+   "scrollH": 38,
+   "clientH": 38,
+   "scrollW": 1216,
+   "clientW": 1216,
+   "overflowX": "visible",
+   "overflowY": "visible",
+   "border": "2px",
+   "btnBottom": 136.5,
+   "rowBottom": 136.5,
+   "x": 240.65625,
+   "bottom": 136.5,
+   "tabs": [
+    "Overview",
+    "Training log",
+    "Progress",
+    "Programme",
+    "Versions"
+   ],
+   "underlinePx": 2
+  },
+  "recovery normal": {
+   "title": "Recovery vs baseline",
+   "verdict": "All within normal range this week",
+   "svgs": 4,
+   "bands": 4,
+   "solid": 4,
+   "dots": 32,
+   "better": 16,
+   "worse": 16,
+   "aria": [
+    "Sleep, last 30 nights, 7-night average normal against your normal range",
+    "Readiness, last 30 nights, 7-night average normal against your normal range",
+    "HRV, last 30 nights, 7-night average normal against your normal range",
+    "Resting HR, last 30 nights, 7-night average normal against your normal range"
+   ],
+   "text": "Recovery vs baseline | All within normal range this week | Sleep | 7.4 h | 7-night ±0.0 vs normal | normal 6.9–7.5 | Readiness | 81 | 7-night ±0 vs normal | normal 74–82 | HRV | 47 ms | 7-night ±0 vs normal | normal 40–48 | Resting HR | 52 bpm | 7-night ±0 vs normal | normal 50–52 | 5.9. | 4.10.",
+   "box": {
+    "x": 1010.578125,
+    "y": 440,
+    "w": 397.421875,
+    "h": 287
+   },
+   "pageScroll": 1440,
+   "innerWidth": 1440
+  },
+  "recovery worse": {
+   "title": "Recovery vs baseline",
+   "verdict": "Below normal this week: Sleep, Readiness, HRV, Resting HR",
+   "svgs": 4,
+   "bands": 4,
+   "solid": 4,
+   "dots": 27,
+   "better": 12,
+   "worse": 15,
+   "aria": [
+    "Sleep, last 30 nights, 7-night average worse against your normal range",
+    "Readiness, last 30 nights, 7-night average worse against your normal range",
+    "HRV, last 30 nights, 7-night average worse against your normal range",
+    "Resting HR, last 30 nights, 7-night average worse against your normal range"
+   ],
+   "text": "Recovery vs baseline | Below normal this week: Sleep, Readiness, HRV, Resting HR | Sleep | 6.5 h | 7-night −0.7 vs normal | worse · normal 6.6–7.5 | Readiness | 71 | 7-night −8 vs normal | worse · normal 71–82 | HRV | 36 ms | 7-night −9 vs normal | worse · normal 36–48 | Resting HR | 57 bpm | 7-night +4 vs normal | worse · normal 50–54 | 5.9. | 4.10.",
+   "box": {
+    "x": 1010.578125,
+    "y": 440,
+    "w": 397.421875,
+    "h": 287
+   },
+   "pageScroll": 1440,
+   "innerWidth": 1440
+  },
+  "log": {
+   "title": "Week 28 Sep – 4 Oct",
+   "cols": 7,
+   "selected": "2026-10-04",
+   "cardDay": "2026-10-04",
+   "cardTitle": "Cleared — travel",
+   "rows": -1,
+   "hasResults": true,
+   "gridScroll": {
+    "sw": 1214,
+    "cw": 1214,
+    "overflowX": "auto"
+   },
+   "pageScroll": 1440,
+   "innerWidth": 1440,
+   "empty": false,
+   "prevDisabled": false,
+   "nextDisabled": true,
+   "adherenceLine": true,
+   "oldList": false,
+   "monKcal": "rgb(31, 42, 36)",
+   "wedKcal": "rgb(46, 32, 41)",
+   "friAlc": "rgb(46, 32, 41)",
+   "thuEx": "rgb(31, 42, 36)",
+   "tueEx": "rgb(21, 25, 34)",
+   "sunSess": "rgb(46, 32, 41)",
+   "selOutline": "rgb(227, 162, 60) 0px 0px 0px 1px inset",
+   "selHeader": "2px rgb(227, 162, 60)"
+  }
+ },
+ "1280x800": {
+  "tabs": {
+   "scrollH": 38,
+   "clientH": 38,
+   "scrollW": 1056,
+   "clientW": 1056,
+   "overflowX": "visible",
+   "overflowY": "visible",
+   "border": "2px",
+   "btnBottom": 136.5,
+   "rowBottom": 136.5,
+   "x": 240.65625,
+   "bottom": 136.5,
+   "tabs": [
+    "Overview",
+    "Training log",
+    "Progress",
+    "Programme",
+    "Versions"
+   ],
+   "underlinePx": 2
+  },
+  "recovery normal": {
+   "title": "Recovery vs baseline",
+   "verdict": "All within normal range this week",
+   "svgs": 4,
+   "bands": 4,
+   "solid": 4,
+   "dots": 32,
+   "better": 16,
+   "worse": 16,
+   "aria": [
+    "Sleep, last 30 nights, 7-night average normal against your normal range",
+    "Readiness, last 30 nights, 7-night average normal against your normal range",
+    "HRV, last 30 nights, 7-night average normal against your normal range",
+    "Resting HR, last 30 nights, 7-night average normal against your normal range"
+   ],
+   "text": "Recovery vs baseline | All within normal range this week | Sleep | 7.4 h | 7-night ±0.0 vs normal | normal 6.9–7.5 | Readiness | 81 | 7-night ±0 vs normal | normal 74–82 | HRV | 47 ms | 7-night ±0 vs normal | normal 40–48 | Resting HR | 52 bpm | 7-night ±0 vs normal | normal 50–52 | 5.9. | 4.10.",
+   "box": {
+    "x": 903.921875,
+    "y": 440,
+    "w": 344.078125,
+    "h": 287
+   },
+   "pageScroll": 1280,
+   "innerWidth": 1280
+  },
+  "recovery worse": {
+   "title": "Recovery vs baseline",
+   "verdict": "Below normal this week: Sleep, Readiness, HRV, Resting HR",
+   "svgs": 4,
+   "bands": 4,
+   "solid": 4,
+   "dots": 27,
+   "better": 12,
+   "worse": 15,
+   "aria": [
+    "Sleep, last 30 nights, 7-night average worse against your normal range",
+    "Readiness, last 30 nights, 7-night average worse against your normal range",
+    "HRV, last 30 nights, 7-night average worse against your normal range",
+    "Resting HR, last 30 nights, 7-night average worse against your normal range"
+   ],
+   "text": "Recovery vs baseline | Below normal this week: Sleep, Readiness, HRV, Resting HR | Sleep | 6.5 h | 7-night −0.7 vs normal | worse · normal 6.6–7.5 | Readiness | 71 | 7-night −8 vs normal | worse · normal 71–82 | HRV | 36 ms | 7-night −9 vs normal | worse · normal 36–48 | Resting HR | 57 bpm | 7-night +4 vs normal | worse · normal 50–54 | 5.9. | 4.10.",
+   "box": {
+    "x": 903.921875,
+    "y": 440,
+    "w": 344.078125,
+    "h": 303
+   },
+   "pageScroll": 1280,
+   "innerWidth": 1280
+  }
+ },
+ "390x844": {
+  "tabs": {
+   "scrollH": 38,
+   "clientH": 38,
+   "scrollW": 532,
+   "clientW": 350,
+   "overflowX": "auto",
+   "overflowY": "hidden",
+   "border": "2px",
+   "btnBottom": 319.5,
+   "rowBottom": 319.5,
+   "x": 68.890625,
+   "bottom": 319.5,
+   "tabs": [
+    "Overview",
+    "Training log",
+    "Progress",
+    "Programme",
+    "Versions"
+   ],
+   "underlinePx": 2
+  },
+  "log": {
+   "title": "Week 28 Sep – 4 Oct",
+   "cols": 7,
+   "selected": "2026-10-04",
+   "cardDay": "2026-10-04",
+   "cardTitle": "Cleared — travel",
+   "rows": -1,
+   "hasResults": true,
+   "gridScroll": {
+    "sw": 1004,
+    "cw": 348,
+    "overflowX": "auto"
+   },
+   "pageScroll": 390,
+   "innerWidth": 390,
+   "empty": false,
+   "prevDisabled": false,
+   "nextDisabled": true,
+   "adherenceLine": true,
+   "oldList": false,
+   "monKcal": "rgb(31, 42, 36)",
+   "wedKcal": "rgb(46, 32, 41)",
+   "friAlc": "rgb(46, 32, 41)",
+   "thuEx": "rgb(31, 42, 36)",
+   "tueEx": "rgb(21, 25, 34)",
+   "sunSess": "rgb(46, 32, 41)",
+   "selOutline": "rgb(227, 162, 60) 0px 0px 0px 1px inset",
+   "selHeader": "2px rgb(227, 162, 60)"
+  }
+ }
+}

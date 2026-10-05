@@ -7,7 +7,7 @@ import { buildAllAdherence } from "./src/core/adherence.js";
 import { buildRecovery } from "./src/core/recovery.js";
 import { buildNameMap } from "./src/core/names.js";
 import {
-  metricCatalogue, computeMetric, resolveKpiIds, weekPlan, recentSessions, recoveryBars,
+  metricCatalogue, computeMetric, resolveKpiIds, weekPlan, recentSessions, recoveryBaseline, fmtBaselineValue, fmtBaselineDelta,
   needsAttention, buildPersonCtx, DEFAULT_KPIS, trackingItems,
 } from "./src/core/overview.js";
 
@@ -80,7 +80,7 @@ for (const p of roster) {
       if (r !== null && (typeof r !== "object" || !("value" in r) || !("note" in r))) throw new Error("bad shape for " + i.id);
       if (r && r.value !== null && (r.value === "" || /NaN|undefined/.test(String(r.value)))) throw new Error("bad value for " + i.id + ": " + r.value);
     }
-    weekPlan(ctx); recentSessions(ctx); recoveryBars(ctx.recovery); needsAttention(ctx);
+    weekPlan(ctx); recentSessions(ctx); recoveryBaseline(ctx.recovery); needsAttention(ctx);
   } catch (e) { threw = e.message; }
   check("catalogue computes for " + p.name, !threw, threw);
 }
@@ -251,10 +251,64 @@ for (const p of roster) {
   check("sleep formatted 7h12", sleep.value === "7h12" && /^▲ 0h\d\d vs 7-day avg$/.test(sleep.note), sleep);
   const steps = computeMetric("steps", juha);
   check("steps = latest day before today (9,000), not today's 1,200", steps.value === "9,000", steps);
-  const bars = recoveryBars(juha.recovery);
-  check("7-night bars: missing nights are null, never 0", bars && bars[0].values.length === 7 && bars[0].values.includes(null) && !bars[0].values.includes(0), bars && bars[0].values);
-  check("bars newest value", bars[1].latest === 80);
-  check("no series → no bars", recoveryBars(null) === null);
+  const rb = recoveryBaseline(juha.recovery);
+  const byId = (id) => rb.rows.find((r) => r.id === id);
+  check("30 calendar nights per metric, ending at the newest night", rb && rb.rows.length === 4 && rb.rows.every((r) => r.nights.length === 30) && rb.rows[0].nights[29].day === "2026-09-18" && rb.rows[0].nights[0].day === "2026-08-20", rb && rb.rows[0].nights.map((n) => n.day).filter((_, i) => i % 29 === 0));
+  check("metric order and betterWhen", rb.rows.map((r) => r.id + ":" + r.betterWhen).join() === "sleepH:higher,readiness:higher,hrv:higher,rhr:lower");
+  check("missing nights are null, never 0 (gap in the line)", byId("hrv").nights[29].value === null && byId("hrv").nights[28].value === 60 && !byId("hrv").nights.some((n) => n.value === 0) && byId("hrv").nights.filter((n) => n.value === null).length === 27, byId("hrv").nights.filter((n) => n.value !== null));
+  check("latest = newest non-null value per metric", byId("sleepH").latest === 7.2 && byId("readiness").latest === 80 && byId("hrv").latest === 60 && byId("rhr").latest === 50, rb.rows.map((r) => r.latest));
+  check("3 nights → n counted, baseline null, no week, no outside", rb.rows.every((r) => r.n === 3 && r.baseline === null && r.week === null && r.outside.length === 0));
+  check("fewer than 14 nights → Building baseline verdict", rb.verdict === "Building baseline \u2014 3 of 14 nights", rb.verdict);
+  check("no series → null", recoveryBaseline(null) === null && recoveryBaseline({ series: [] }) === null && recoveryBaseline({}) === null);
+}
+
+// 8b. recovery vs baseline on synthetic 30-night series (numbers worked by hand)
+{
+  const END = new Date(2026, 9, 4); // Sun 4 Oct 2026
+  const dk = (back) => { const d = new Date(2026, 9, 4 - back); return [d.getFullYear(), String(d.getMonth() + 1).padStart(2, "0"), String(d.getDate()).padStart(2, "0")].join("-"); };
+  const mk = (n, f) => ({ series: Array.from({ length: n }, (_, i) => { const back = n - 1 - i; return { day: dk(back), label: "", ...f(29 - back) }; }) });
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  // value pattern: nights 0-19 alternate 46/54 (sum 1000), nights 20-29 = 56 (sum 560)
+  // mean = 1560/30 = 52; variance = (10*36 + 10*4 + 10*16)/30 = 560/30; sd = 4.3204937989
+  const sd = Math.sqrt(560 / 30);
+  const pat = (i) => (i < 20 ? (i % 2 ? 54 : 46) : 56);
+  const flat = { sleepH: 7, readiness: 80 };
+  const hi = recoveryBaseline(mk(30, (i) => ({ ...flat, hrv: pat(i), rhr: pat(i) })));
+  const hrv = hi.rows.find((r) => r.id === "hrv"), rhr = hi.rows.find((r) => r.id === "rhr");
+  check("baseline mean 52 and population SD for 30 nights", hrv.n === 30 && near(hrv.baseline.mean, 52) && near(hrv.baseline.sd, sd) && near(hrv.baseline.lo, 52 - sd) && near(hrv.baseline.hi, 52 + sd), hrv.baseline);
+  check("week mean 56, delta +4", near(hrv.week.mean, 56) && near(hrv.week.delta, 4), hrv.week);
+  check("HRV week +4 (>= 0.5 SD) is better", hrv.week.status === "better");
+  check("resting HR week +4 above baseline (>= 0.5 SD) is worse", rhr.week.status === "worse");
+  check("outside = exactly the 46 nights; below normal HRV is not better", hrv.outside.length === 10 && hrv.outside.every((o) => o.value === 46 && o.better === false) && hrv.outside[0].day === dk(29), hrv.outside.length);
+  check("outside for resting HR: lower is better", rhr.outside.length === 10 && rhr.outside.every((o) => o.better === true));
+  check("constant metrics: SD 0, delta 0 → normal, nothing outside", ["sleepH", "readiness"].every((id) => { const r = hi.rows.find((x) => x.id === id); return r.baseline.sd === 0 && r.week.status === "normal" && r.outside.length === 0; }));
+  check("verdict names the worse metric", hi.verdict === "Below normal this week: Resting HR", hi.verdict);
+  const two = recoveryBaseline(mk(30, (i) => ({ sleepH: i < 20 ? (i % 2 ? 5.4 : 4.6) : 4.0, readiness: 80, hrv: 50, rhr: pat(i) })));
+  check("two worse metrics are joined in metric order", two.verdict === "Below normal this week: Sleep, Resting HR", two.verdict);
+  const dn = recoveryBaseline(mk(30, (i) => ({ sleepH: 7, readiness: i < 20 ? (i % 2 ? 54 : 46) : 40, hrv: i < 20 ? (i % 2 ? 54 : 46) : 40, rhr: 50 })));
+  check("lower readiness and HRV is worse; two labels joined", dn.verdict === "Below normal this week: Readiness, HRV", dn.verdict);
+  const calm = recoveryBaseline(mk(30, () => ({ sleepH: 7, readiness: 80, hrv: 50, rhr: 50 })));
+  check("everything normal → all-within verdict", calm.verdict === "All within normal range this week" && calm.rows.every((r) => r.week.status === "normal"), calm.verdict);
+  const better = recoveryBaseline(mk(30, (i) => ({ sleepH: 7, readiness: 80, hrv: pat(i), rhr: 50 })));
+  check("better-only week keeps the all-within verdict", better.verdict === "All within normal range this week");
+  // boundaries
+  const b14 = recoveryBaseline(mk(14, (i) => ({ sleepH: 7, readiness: 80, hrv: i, rhr: 50 })));
+  const b13 = recoveryBaseline(mk(13, (i) => ({ sleepH: 7, readiness: 80, hrv: i, rhr: 50 })));
+  check("14 non-null nights give a baseline, 13 do not", b14.rows[2].baseline !== null && b13.rows[2].baseline === null && b13.rows[2].week === null && b13.rows[2].outside.length === 0);
+  check("13 nights: Building baseline verdict, n is the largest n", b13.verdict === "Building baseline \u2014 13 of 14 nights", b13.verdict);
+  check("nights older than the 13 are null gaps, length stays 30", b13.rows[2].nights.length === 30 && b13.rows[2].nights.slice(0, 17).every((n) => n.value === null));
+  // a night exactly on lo / hi is inside, not outside (values 0 and 2: mean 1, SD 1, band 0..2)
+  const edge = recoveryBaseline(mk(30, (i) => ({ sleepH: 7, readiness: 80, hrv: i % 2 ? 2 : 0, rhr: 50 })));
+  check("nights exactly on lo / hi are not outside", edge.rows[2].baseline.lo === 0 && edge.rows[2].baseline.hi === 2 && edge.rows[2].outside.length === 0, edge.rows[2].baseline);
+  // week threshold: |delta| exactly 0.5 SD is not normal; just under is
+  // calendar gaps: missing rows are null and excluded, never zero-filled
+  const gap = mk(30, (i) => ({ sleepH: 7, readiness: 80, hrv: pat(i), rhr: 50 }));
+  gap.series.splice(5, 3); // three nights with no row at all
+  const g = recoveryBaseline(gap).rows[2];
+  check("a night with no row is a null gap, excluded from n and the baseline", g.n === 27 && g.nights.filter((n) => n.value === null).length === 3 && g.nights[5].value === null && g.nights[7].value === null);
+  check("week with no readings has no week object", (() => { const x = mk(30, (i) => ({ sleepH: 7, readiness: 80, hrv: i >= 23 ? null : 50, rhr: 50 })); const r = recoveryBaseline(x).rows[2]; return r.baseline !== null && r.week === null; })());
+  // formatting
+  check("sleep to 1 decimal, others whole; signed deltas use a true minus", fmtBaselineValue("sleepH", 7.25) === "7.3" && fmtBaselineValue("hrv", 47.6) === "48" && fmtBaselineValue("hrv", null) === "\u2014" && fmtBaselineDelta("rhr", -2) === "\u22122" && fmtBaselineDelta("sleepH", 0.44) === "+0.4" && fmtBaselineDelta("hrv", -0.2) === "\u00b10" && fmtBaselineDelta("sleepH", 0.04) === "\u00b10.0");
 }
 
 // 9. cardio: honest null without a declared duration task, sum with one

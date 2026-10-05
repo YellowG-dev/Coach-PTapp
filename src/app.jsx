@@ -10,7 +10,6 @@ import { loadAll, insertProgramVersion, deleteFutureVersion, canDeleteVersion } 
 import { preflight } from "./core/publish.js";
 import { CheckResult } from "./check-result.jsx";
 import { ProgrammeEditor } from "./editor.jsx";
-import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
 import { buildRecovery, connectionLabel } from "./core/recovery.js";
@@ -19,9 +18,8 @@ import { buildPersonCtx, needsAttention } from "./core/overview.js";
 import { loadDraft } from "./core/editor.js";
 import { resolveForDate } from "./core/program-schema.js";
 import { Progress } from "./progress.jsx";
+import { LogWeek, DayCardView } from "./logweek.jsx";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
-
-const PAGE = 20; // days rendered before "show earlier"
 
 export const TABS = [
   { id: "overview", label: "Overview" },
@@ -47,7 +45,6 @@ export default function CoachApp() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [route, setRoute] = useState(readHash);
-  const [visible, setVisible] = useState(PAGE);
   // Bumped after a successful publish so the loader re-runs and the days are
   // re-scored against the new version. A state key rather than re-setting
   // `user` to a fresh object, which worked only as a side effect of the
@@ -106,7 +103,6 @@ export default function CoachApp() {
   const person = roster.find((p) => p.id === route.personId) || roster[0] || null;
   const tab = route.tab || "overview";
   const personKey = person ? person.id : null;
-  useEffect(() => setVisible(PAGE), [personKey]);
   const days = person && data ? mergeDays(data, person.id) : [];
   // Scored for the whole roster at once, not just the selected person: the
   // switcher shows each person's headline number, and computing it per
@@ -223,7 +219,7 @@ export default function CoachApp() {
                 key={person.id}
                 tab={tab}
                 person={person}
-                days={days.slice(0, visible)}
+                days={days}
                 total={days.length}
                 adherence={personAdherence}
                 pctByDay={pctByDay}
@@ -232,10 +228,10 @@ export default function CoachApp() {
                 names={names}
                 programs={data.programs || []}
                 logRows={(data.logs || {})[person.id] || []}
+                overrideRows={(data.overrides || {})[person.id] || []}
                 ownerId={user.id}
                 ctx={ctx ? { ...ctx, draft: draftInfo(person.id) } : null}
                 onPublished={() => setReloadKey((k) => k + 1)}
-                onMore={() => setVisible((v) => v + PAGE)}
               />
             </>
           )}
@@ -455,7 +451,11 @@ const fromLabel = (v) => (v === "-infinity" || v == null ? "the start" : String(
 
 function TabRow({ tab, onSelect }) {
   return (
-    <div role="tablist" style={{ borderColor: T.border }} className="flex gap-1 border-b mb-4 overflow-x-auto">
+    <div
+      role="tablist"
+      style={{ boxShadow: `inset 0 -1px 0 ${T.border}` }}
+      className="flex gap-1 mb-4 overflow-x-auto overflow-y-hidden lg:overflow-visible"
+    >
       {TABS.map((t) => {
         const active = t.id === tab;
         return (
@@ -468,7 +468,7 @@ function TabRow({ tab, onSelect }) {
               color: active ? T.textPrimary : T.textSecondary,
               borderColor: active ? T.accent : "transparent",
             }}
-            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 -mb-px focus:outline-none focus-visible:ring-2"
+            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 focus:outline-none focus-visible:ring-2"
           >
             {t.label}
           </button>
@@ -478,7 +478,7 @@ function TabRow({ tab, onSelect }) {
   );
 }
 
-export function PersonPanel({ tab = "overview", person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, ownerId, ctx, onPublished, onMore }) {
+export function PersonPanel({ tab = "overview", person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, overrideRows, ownerId, ctx, onPublished }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -510,21 +510,16 @@ export function PersonPanel({ tab = "overview", person, days, total, adherence, 
           </Notice>
         ) : (
           <>
-            <Adherence person={person} adherence={adherence} />
-            <div className="space-y-3">
-              {days.map((d) => (
-                <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} names={names} />
-              ))}
-            </div>
-            {days.length < total && (
-              <button
-                onClick={onMore}
-                style={{ borderColor: T.border, color: T.textSecondary }}
-                className="w-full mt-3 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
-              >
-                Show earlier days · {total - days.length} more
-              </button>
-            )}
+            <Adherence person={person} adherence={adherence} compact />
+            <LogWeek
+              key={person.id}
+              person={person}
+              logRows={logRows || []}
+              overrideRows={overrideRows || []}
+              programRows={(programs || []).filter((r) => r.assigned_to === person.id)}
+              pctByDay={pctByDay}
+              names={names}
+            />
           </>
         ))}
 
@@ -826,7 +821,7 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
 // Exported for verify-adherence.mjs: the client-facing sharing toggle shipped
 // in Phase 2 proven at the policy level but never once seen rendered, which is
 // the failure mode a render test exists to prevent.
-export function Adherence({ person, adherence }) {
+export function Adherence({ person, adherence, compact }) {
   if (!adherence) return null;
 
   if (adherence.noProgram) {
@@ -842,6 +837,32 @@ export function Adherence({ person, adherence }) {
 
   const s = adherence.summary;
   const cats = Object.keys(s.byCat);
+
+  // One line above the week grid: the same numbers, without the per-category bars.
+  if (compact) {
+    return (
+      <div
+        data-part="adherence-compact"
+        style={{ background: T.card, borderColor: T.border }}
+        className="rounded-xl border px-4 py-2 mb-4 flex items-baseline gap-x-5 gap-y-1 flex-wrap text-xs"
+      >
+        <span style={{ color: T.textSecondary }}>
+          Last 30 days <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm ml-1">{pctLabel(adherence.last30.avgPct)}</strong>
+        </span>
+        <span style={{ color: T.textSecondary }}>
+          All time <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{pctLabel(s.avgPct)}</strong>
+        </span>
+        <span style={{ color: T.textSecondary }}>
+          Days scored <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{s.scoredDays}</strong>
+        </span>
+        {s.skipDays > 0 && (
+          <span style={{ color: T.textSecondary }}>
+            Cleared <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{s.skipDays}</strong>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
@@ -910,206 +931,14 @@ function Figure({ label, value, big }) {
 
 /* -------------------------------- day card -------------------------------- */
 
-export function DayCard({ day, scored, names }) {
-  const shaped = day.log ? shapeDay(day.log) : null;
-  const sched = day.override ? shapeOverride(day.override) : null;
-  const label = formatDay(day.day);
-
-  return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border overflow-hidden max-w-[72rem]">
-      <div
-        style={{ borderColor: T.border }}
-        className="border-b px-4 py-2 flex items-baseline justify-between gap-3 flex-wrap"
-      >
-        <div>
-          <span style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
-            {label.weekday}
-          </span>
-          <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-xs ml-2">
-            {label.full}
-          </span>
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {scored && scored.skip && <Tag tone="pause">{scored.skip} — cleared</Tag>}
-          {scored && !scored.skip && scored.pct != null && (
-            <Tag tone={scored.pct >= 0.8 ? "good" : scored.pct >= 0.5 ? "accent" : "warn"} mono>
-              {pctLabel(scored.pct)} · {scored.doneCount}/{scored.total}
-            </Tag>
-          )}
-          {scored && !scored.skip && scored.pct == null && <Tag>nothing scheduled</Tag>}
-          {shaped && shaped.gentler && <Tag tone="accent">Gentler week</Tag>}
-          {shaped && shaped.weekType && <Tag>Week {String(shaped.weekType).toUpperCase()}</Tag>}
-          {sched && sched.skip && <Tag tone="warn">Skipped · {sched.skip}</Tag>}
-          {!day.log && <Tag>Rescheduled only</Tag>}
-        </div>
-      </div>
-
-      <div className="px-4 pt-1 pb-3">
-        {sched && !sched.isEmpty && <Schedule sched={sched} />}
-
-        {shaped && shaped.exercises.length > 0 && (
-          <Group title="Exercises">
-            <div className="space-y-2">
-              {shaped.exercises.map((e) => (
-                <Exercise key={e.id} ex={e} names={names} />
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.measurements.length > 0 && (
-          <Group title="Measurements">
-            <Pairs
-              items={shaped.measurements.map((m) => ({
-                key: m.id,
-                label: labelFor(m.id, names),
-                value: unitFor(m.id) ? `${m.value} ${unitFor(m.id)}` : String(m.value),
-              }))}
-            />
-          </Group>
-        )}
-
-        {shaped && shaped.ratings.length > 0 && (
-          <Group title="How it felt">
-            <Pairs
-              items={shaped.ratings.map((r) => ({ key: r.id, label: labelFor(r.id, names), value: String(r.value) }))}
-            />
-          </Group>
-        )}
-
-        {shaped && shaped.ticked.length > 0 && (
-          <Group title="Ticked, no sets logged">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.ticked.map((id) => (
-                <Tag key={id} mono>
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.checks.length > 0 && (
-          <Group title="Daily checks">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.checks.map((id) => (
-                <Tag key={id} mono>
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.unchecked.length > 0 && (
-          <Group title="Opened but left unticked">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.unchecked.map((id) => (
-                <Tag key={id} mono tone="quiet">
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.notes && (
-          <Group title="Note">
-            <p style={{ color: T.textPrimary }} className="text-sm">
-              {shaped.notes}
-            </p>
-          </Group>
-        )}
-
-        {shaped && shaped.unknown && (
-          <Group title="Other recorded fields">
-            <pre
-              style={{ fontFamily: FONT_MONO, color: T.textSecondary, background: T.bg, borderColor: T.border }}
-              className="text-[11px] p-2 rounded-lg border overflow-x-auto"
-            >
-              {JSON.stringify(shaped.unknown, null, 2)}
-            </pre>
-          </Group>
-        )}
-
-        {shaped && shaped.isEmpty && (!sched || sched.isEmpty) && (
-          <p style={{ color: T.textMuted }} className="text-xs">
-            The day was opened but nothing was recorded.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Schedule({ sched }) {
-  return (
-    <Group title="Schedule changes">
-      <div className="space-y-1 max-w-[18rem]">
-        {sched.slots.map((s) => (
-          <Row
-            key={s.slot}
-            left={s.slot}
-            right={s.value === null ? "cleared" : `set to ${s.value}`}
-            dim={s.value === null}
-          />
-        ))}
-        {sched.tests.map((t) => (
-          <Row key={t.name} left={`${t.name} test`} right={t.due ? "marked due" : "marked not due"} dim={!t.due} />
-        ))}
-        {sched.activities.map((a) => (
-          <Row key={a.id || a.name} left="added" right={a.name} />
-        ))}
-      </div>
-    </Group>
-  );
-}
-
-function Exercise({ ex, names }) {
-  const substituted = Boolean(ex.sub);
-  return (
-    <div style={{ borderColor: T.border }} className="border-l-2 pl-3">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <span
-          style={{ fontFamily: FONT_MONO, color: substituted ? T.textMuted : T.textPrimary }}
-          className="text-xs"
-        >
-          {labelFor(ex.id, names)}
-          {substituted && (
-            <>
-              <span style={{ color: T.textMuted }}> → </span>
-              <span style={{ color: T.accentAlt, fontFamily: FONT_BODY }} className="text-sm">
-                {ex.sub.name}
-              </span>
-              {ex.sub.reason && <span style={{ color: T.textMuted }}> ({ex.sub.reason})</span>}
-            </>
-          )}
-        </span>
-        {ex.done === false && <Tag tone="quiet">not ticked</Tag>}
-      </div>
-
-      {formatSets(ex.sets) && (
-        <p style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
-          {formatSets(ex.sets)}
-        </p>
-      )}
-
-      {ex.variants.map((v) => (
-        <p key={v.slug} style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
-          {formatSets(v.sets)}
-          <span style={{ color: T.textMuted, fontFamily: FONT_BODY }} className="text-xs ml-2">
-            {v.label}
-          </span>
-        </p>
-      ))}
-
-      {ex.note && (
-        <p style={{ color: T.accent }} className="text-xs mt-1">
-          📌 {ex.note}
-        </p>
-      )}
-    </div>
-  );
+/**
+ * One day, in full. The card itself is in logweek.jsx beside the week grid it
+ * is shown under; this keeps the name and props the tests and the panel know.
+ * `detail` and `selected` are optional: without them the card is built from
+ * `day` alone.
+ */
+export function DayCard({ day, scored, names, detail, selected }) {
+  return <DayCardView day={day} scored={scored} names={names} detail={detail} selected={selected} />;
 }
 
 /* ------------------------------- small parts ------------------------------- */
@@ -1119,47 +948,6 @@ function Shell({ children, wide }) {
     <div style={{ background: T.bg, fontFamily: FONT_BODY, minHeight: "100vh" }} className="w-full">
       <FontImport />
       {wide ? <div className="w-full">{children}</div> : <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>}
-    </div>
-  );
-}
-
-function Group({ title, children }) {
-  return (
-    <div className="mt-3">
-      <p style={{ color: T.textSecondary }} className="text-[10px] uppercase tracking-wider mb-1">
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-// Cells stay narrow however wide the screen is, so a label and its value stay
-// close; a wider screen gets more cells per row, not wider ones.
-function Pairs({ items }) {
-  return (
-    <div
-      className="grid gap-x-6 gap-y-1"
-      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(14rem, 18rem))" }}
-    >
-      {items.map((i) => (
-        <Row key={i.key} left={i.label} right={i.value} />
-      ))}
-    </div>
-  );
-}
-
-// Label left, value right, joined by a faint dotted leader the eye can follow.
-function Row({ left, right, dim }) {
-  return (
-    <div className="flex items-baseline gap-2 text-xs min-w-0">
-      <span style={{ color: T.textSecondary }} className="shrink-0 max-w-[65%] truncate" title={typeof left === "string" ? left : undefined}>
-        {left}
-      </span>
-      <span style={{ borderBottom: `1px dotted ${T.border}` }} className="flex-1 min-w-[0.5rem] h-0 self-end mb-[3px]" aria-hidden="true" />
-      <span style={{ fontFamily: FONT_MONO, color: dim ? T.textMuted : T.textPrimary }} className="shrink-0">
-        {right}
-      </span>
     </div>
   );
 }

@@ -405,39 +405,84 @@ export function recentSessions(ctx, limit = 8) {
     }));
 }
 
-/* ------------------------------ recovery bars ------------------------------- */
+/* -------------------------- recovery vs baseline ---------------------------- */
 
-const BAR_ROWS = [
-  { id: "sleepH", label: "Sleep", unit: "h" },
-  { id: "readiness", label: "Readiness", unit: "" },
-  { id: "hrv", label: "HRV", unit: "" },
-  { id: "rhr", label: "Resting HR", unit: "" },
+const BASELINE_ROWS = [
+  { id: "sleepH", label: "Sleep", unit: "h", betterWhen: "higher" },
+  { id: "readiness", label: "Readiness", unit: "", betterWhen: "higher" },
+  { id: "hrv", label: "HRV", unit: "ms", betterWhen: "higher" },
+  { id: "rhr", label: "Resting HR", unit: "bpm", betterWhen: "lower" },
 ];
 
+export const BASELINE_NIGHTS = 30;
+export const BASELINE_MIN = 14;
+export const WEEK_NIGHTS = 7;
+
+/** Sleep to one decimal, everything else a whole number; "—" for no value. */
+export function fmtBaselineValue(id, v) {
+  if (v == null || isNaN(v)) return "\u2014";
+  return id === "sleepH" ? (Math.round(v * 10) / 10).toFixed(1) : String(Math.round(v));
+}
+
+/** Same formatting with an explicit sign and a true minus: "+3", "\u22120.4"; "\u00b10" when it rounds to nothing. */
+export function fmtBaselineDelta(id, v) {
+  const t = fmtBaselineValue(id, Math.abs(v));
+  if (Number(t) === 0) return "\u00b1" + t;
+  return (v < 0 ? "\u2212" : "+") + t;
+}
+
+const mean = (xs) => xs.reduce((a, b) => a + b, 0) / xs.length;
+
 /**
- * Seven calendar nights ending at the newest night in the series. A night
- * with no row is `null` (empty bar), never a zero.
+ * Each metric against the person's own normal: the last 30 calendar nights
+ * ending at the newest night in the series. A night with no row is `null`
+ * (a gap), never a zero and never estimated. The baseline is the mean and
+ * population SD of the non-null nights, and exists only from 14 of them.
  */
-export function recoveryBars(recovery) {
+export function recoveryBaseline(recovery) {
   if (!recovery || !recovery.series || !recovery.series.length) return null;
   const series = recovery.series;
   const end = series[series.length - 1].day;
   const [y, mo, d] = end.split("-").map(Number);
   const byDay = {};
   series.forEach((p) => (byDay[p.day] = p));
-  const nights = Array.from({ length: 7 }, (_, i) => dateKey(new Date(y, mo - 1, d - (6 - i))));
-  return BAR_ROWS.map((row) => {
-    const values = nights.map((k) => (byDay[k] && byDay[k][row.id] != null ? byDay[k][row.id] : null));
-    const present = values.filter((v) => v != null);
-    const latest = [...values].reverse().find((v) => v != null);
-    return {
-      ...row,
-      nights,
-      values,
-      latest: latest == null ? null : latest,
-      max: present.length ? Math.max(...present) : null,
-    };
+  const days = Array.from({ length: BASELINE_NIGHTS }, (_, i) => dateKey(new Date(y, mo - 1, d - (BASELINE_NIGHTS - 1 - i))));
+
+  const rows = BASELINE_ROWS.map((row) => {
+    const nights = days.map((day) => ({ day, value: byDay[day] && byDay[day][row.id] != null ? byDay[day][row.id] : null }));
+    const present = nights.filter((n) => n.value != null);
+    const latest = present.length ? present[present.length - 1].value : null;
+    let baseline = null;
+    if (present.length >= BASELINE_MIN) {
+      const m = mean(present.map((n) => n.value));
+      const sd = Math.sqrt(mean(present.map((n) => (n.value - m) ** 2)));
+      baseline = { mean: m, sd, lo: m - sd, hi: m + sd };
+    }
+    const better = (v) => (row.betterWhen === "higher" ? v > 0 : v < 0);
+    let week = null;
+    const wk = nights.slice(-WEEK_NIGHTS).filter((n) => n.value != null);
+    if (baseline && wk.length) {
+      const wm = mean(wk.map((n) => n.value));
+      const delta = wm - baseline.mean;
+      const status = delta === 0 || Math.abs(delta) < 0.5 * baseline.sd ? "normal" : better(delta) ? "better" : "worse";
+      week = { mean: wm, delta, status };
+    }
+    const outside = baseline
+      ? present
+          .filter((n) => n.value < baseline.lo || n.value > baseline.hi)
+          .map((n) => ({ day: n.day, value: n.value, better: better(n.value - baseline.mean) }))
+      : [];
+    return { ...row, nights, latest, n: present.length, baseline, week, outside };
   });
+
+  const worse = rows.filter((r) => r.week && r.week.status === "worse").map((r) => r.label);
+  const anyBaseline = rows.some((r) => r.baseline);
+  const verdict = worse.length
+    ? "Below normal this week: " + worse.join(", ")
+    : anyBaseline
+    ? "All within normal range this week"
+    : `Building baseline \u2014 ${Math.max(...rows.map((r) => r.n))} of ${BASELINE_MIN} nights`;
+  return { rows, verdict };
 }
 
 /* ----------------------------- needs attention ------------------------------ */
