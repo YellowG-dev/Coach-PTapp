@@ -66,7 +66,7 @@ const data = { ok: true, me: ID.joonatan, roster, logs, overrides, programs, wea
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "coach-browser-"));
 const stubs = {
   "supabase.js": `export const isConfigured=()=>true;export const currentUser=async()=>({id:${JSON.stringify(ID.joonatan)},email:"coach@example.com"});export const onAuthChange=()=>()=>{};export const sendMagicLink=async()=>({ok:true});export const signOut=async()=>{};export const getClient=()=>null;`,
-  "data.js": `export const loadAll=async()=>(${JSON.stringify(data)});export const insertProgramVersion=async()=>({ok:false,error:"stub"});`,
+  "data.js": `export const loadAll=async()=>(${JSON.stringify(data)});export const insertProgramVersion=async()=>({ok:false,error:"stub"});export const deleteFutureVersion=async()=>({ok:false,error:"stub"});export const canDeleteVersion=()=>false;`,
 };
 const stubPlugin = {
   name: "stubs",

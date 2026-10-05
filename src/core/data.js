@@ -13,6 +13,7 @@
 // back. Whatever renders for you renders for them, through the same code.
 
 import { getClient } from "./supabase.js";
+import { dateKey } from "./dates.js";
 
 /**
  * Everything the dashboard needs, in one round trip.
@@ -173,7 +174,8 @@ function shortId(id) {
  * `(assigned_to, effective_from)` is the backstop; `preflight()` in
  * publish.js is what gives the coach a readable answer before it fires.
  *
- * The only write this dashboard performs. Everything else here is read-only,
+ * One of two writes this dashboard performs (the other, deleteFutureVersion,
+ * removes only a version not yet in force). Everything else here is read-only,
  * and that is deliberate: coach access to a client's *logs* stays read-only
  * by design. A program is the coach's own row, not the client's data.
  */
@@ -206,6 +208,47 @@ export async function insertProgramVersion(row) {
       return { ok: false, error: error.message };
     }
     return { ok: true, row: data };
+  } catch (e) {
+    return { ok: false, error: "Could not reach the server." };
+  }
+}
+
+/**
+ * May this version be deleted? Only one that has not yet taken effect:
+ * `effective_from` strictly after today (local date). An in-force or past
+ * version is never deletable — removing it would re-score history.
+ * "-infinity" and anything that is not a yyyy-mm-dd date are never deletable.
+ */
+export function canDeleteVersion(row, today = new Date()) {
+  const from = row && row.effective_from;
+  if (typeof from !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(from)) return false;
+  return from.slice(0, 10) > dateKey(today);
+}
+
+/**
+ * Delete one not-yet-effective version (P4, 5 Oct 2026). The query itself
+ * carries the date guard, so an in-force or past row is refused here even
+ * before the database's delete policy refuses it. Never throws.
+ *
+ * `opts.client` and `opts.today` exist for the tests.
+ */
+export async function deleteFutureVersion(id, opts = {}) {
+  if (!id) return { ok: false, error: "No version to delete." };
+  const c = opts.client || getClient();
+  if (!c) return { ok: false, error: "Not connected." };
+  const todayKey = dateKey(opts.today || new Date());
+  try {
+    const { data, error } = await c
+      .from("programs")
+      .delete()
+      .eq("id", id)
+      .gt("effective_from", todayKey)
+      .select("id, effective_from");
+    if (error) return { ok: false, error: error.message };
+    if (!data || data.length === 0) {
+      return { ok: false, error: `Nothing deleted: ${id} is already in force, in the past, or gone. Reload.` };
+    }
+    return { ok: true, row: data[0] };
   } catch (e) {
     return { ok: false, error: "Could not reach the server." };
   }

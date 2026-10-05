@@ -301,10 +301,10 @@ check("a bad cardio target (unknown zone) is BLOCKED", () => {
   assert.ok(r.blocking.some((b) => /PK9/.test(b)), r.blocking.join(" | "));
 });
 check("republishing the CURRENT live Juha version at a future date passes", () => {
-  const cur = byId["juha-2026-09-23"].definition;
-  const r = preflight({ ...base, existingRows: programRows, today: new Date(2026, 8, 28), text: JSON.stringify(cur) });
+  const cur = byId["juha-2026-10"].definition;
+  const r = preflight({ ...base, existingRows: programRows, today: new Date(2026, 9, 5), text: JSON.stringify(cur) });
   assert.ok(r.ok, "blocked: " + r.blocking.join(" | "));
-  assert.strictEqual(r.inForce.id, "juha-2026-09-23");
+  assert.strictEqual(r.inForce.id, "juha-2026-10");
 });
 check("the client's warnings are shown but do not block", () => {
   const d = clone(JUHA);

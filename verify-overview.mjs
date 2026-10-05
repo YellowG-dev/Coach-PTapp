@@ -202,6 +202,15 @@ for (const p of roster) {
   check("workout on a skip day with a client extra → no flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)).length === 0, flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skip)));
   const skipBare = [{ day: D, payload: { skip: "travel" } }];
   check("workout on a skip day with no extra → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "running")], skipBare)).length === 1);
+
+  // Step 9 polish §3: a non-cardio sport (strength, yoga) is matched to its own slot only.
+  check("yoga on a day with a planned run and no yoga → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "yoga")])).length === 1);
+  check("yoga on a day with a planned run and no yoga, with cardioTypes → flag", flags(ctxOf(mkDef({ [idx]: { run: runKey } }, types), [wo(D, "yoga")])).length === 1);
+  check("yoga on a planned yoga day → no flag", flags(ctxOf(mkDef({ [idx]: { yoga: "session" } }), [wo(D, "yoga")])).length === 0);
+  check("yoga on a strength-only day → flag", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }), [wo(D, "yoga")])).length === 1);
+  check("strength unchanged: strength day → no flag, run+yoga day → flag", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }), [wo(D, "strengthTraining")])).length === 0 && flags(ctxOf(mkDef({ [idx]: { run: runKey, yoga: "session" } }), [wo(D, "strengthTraining")])).length === 1);
+  check("unknown sport on a day with a planned run → no flag (no-false-alarm fallback)", flags(ctxOf(mkDef({ [idx]: { run: runKey } }), [wo(D, "padel")])).length === 0);
+  check("unknown sport on a strength-only day → flag (fallback unchanged)", flags(ctxOf(mkDef({ [idx]: { strength: strengthKey } }), [wo(D, "padel")])).length === 1);
 }
 
 // 6. Henna's string scales get labels
