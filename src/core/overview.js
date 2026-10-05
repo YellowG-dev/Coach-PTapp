@@ -22,7 +22,7 @@
 
 import { dateKey, getWeekMonday } from "./dates.js";
 import { resolveSchedule } from "./engine.js";
-import { recordedWorkouts, dedupe, weeklyCardioMinutes, isCardioActivity } from "./cardio.js";
+import { recordedWorkouts, dedupe, weeklyCardioMinutes, isCardioActivity, nonCardioSlotFor } from "./cardio.js";
 import { resolveForDate, slotOptionsFor, blocksFor, NON_CARDIO_SLOTS } from "./program-schema.js";
 import { indexByDay } from "./adherence.js";
 import { collapseDays } from "./recovery.js";
@@ -483,7 +483,8 @@ export function needsAttention(ctx) {
     const planned = (slot) => Boolean(program && info && info.slots[slot]);
     const anyNonStrength = Boolean(program && (program.slots || []).some((sl) => sl !== "strength" && planned(sl)));
     const matches = (w) => {
-      if (w.sport === "strengthTraining") return planned("strength");
+      const nc = nonCardioSlotFor(w.sport);
+      if (nc) return planned(nc);
       const types = (program && Array.isArray(program.cardioTypes) ? program.cardioTypes : []).filter(
         (t) => Array.isArray(t.sports) && t.sports.includes(w.sport)
       );
