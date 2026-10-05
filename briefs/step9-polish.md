@@ -1,6 +1,6 @@
 # Step 9 · Polish — closing items G (handoff §4)
 
-Status: **READY once `briefs/data/polish/programs-new-rows.json` is committed** (§4 depends on it; everything else can run without it). Written 3 Oct
+Status: **READY.** `briefs/data/polish/programs-new-rows.json` committed 5 Oct; all 6 rows match the md5s below, and all 11 rows (fixture + new) validate with 0 errors and 0 warnings under the current `program-schema.js`. Written 3 Oct
 2026 from live `main` (clients 5.8.0-beta1, Coach 0.12.0). Re-check every fact
 below against `main` before editing.
 Branch: the session's own (see README).
@@ -89,9 +89,9 @@ force on that date".
   | `juha-2026-10` | 2026-10-01 | `b3ae2519780779ff6b5ff8b6177da6a0` |
   | `ville-2026-10` | 2026-10-02 | `fafa7cdb81bb92ac66b899ba00636504` |
 
-- The 6 rows will be at `briefs/data/polish/programs-new-rows.json`,
-  exported from live by John and checked against the md5s above by chat
-  before the session starts.
+- The 6 rows are at `briefs/data/polish/programs-new-rows.json`, exported
+  from live by John on 5 Oct and checked against the md5s above by chat.
+  Live was unchanged between 3 and 5 Oct (all 11 md5s re-checked).
 - Fixture readers: `verify-adherence`, `verify-browser`, `verify-editor`,
   `verify-overview`, `verify-progress`, `verify-publish`, `verify-validator`.
   Their fixed "today" dates are 18–28 Sep and the fixture logs end 20 Sep, so
