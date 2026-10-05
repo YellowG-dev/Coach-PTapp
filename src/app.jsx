@@ -455,7 +455,11 @@ const fromLabel = (v) => (v === "-infinity" || v == null ? "the start" : String(
 
 function TabRow({ tab, onSelect }) {
   return (
-    <div role="tablist" style={{ borderColor: T.border }} className="flex gap-1 border-b mb-4 overflow-x-auto">
+    <div
+      role="tablist"
+      style={{ boxShadow: `inset 0 -1px 0 ${T.border}` }}
+      className="flex gap-1 mb-4 overflow-x-auto overflow-y-hidden lg:overflow-visible"
+    >
       {TABS.map((t) => {
         const active = t.id === tab;
         return (
@@ -468,7 +472,7 @@ function TabRow({ tab, onSelect }) {
               color: active ? T.textPrimary : T.textSecondary,
               borderColor: active ? T.accent : "transparent",
             }}
-            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 -mb-px focus:outline-none focus-visible:ring-2"
+            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 focus:outline-none focus-visible:ring-2"
           >
             {t.label}
           </button>

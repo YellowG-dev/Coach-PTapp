@@ -155,7 +155,7 @@ for(const p of edRoster){
       if(!h.length){console.log("    tab "+t.id+" empty for "+p.name);bad++;}
       if(/NaN|undefined|\[object/.test(h)){console.log("    tab "+t.id+" leaks NaN/undefined for "+p.name);bad++;}
       if(t.id==="overview"){
-        for(const needle of ["This week · planned vs done","Needs attention","Recent sessions","Recovery · 7 nights","Choose what box 1 shows","Choose what box 4 shows"]) if(!h.includes(needle)){console.log("    overview missing: "+needle+" ("+p.name+")");bad++;}
+        for(const needle of ["This week · planned vs done","Needs attention","Recent sessions","Recovery vs baseline","Choose what box 1 shows","Choose what box 4 shows"]) if(!h.includes(needle)){console.log("    overview missing: "+needle+" ("+p.name+")");bad++;}
         if((h.match(/<select/g)||[]).length!==4){console.log("    overview should have 4 selects");bad++;}
         if((h.match(/data-day="/g)||[]).length!==7){console.log("    overview week grid should have 7 days");bad++;}
       }
