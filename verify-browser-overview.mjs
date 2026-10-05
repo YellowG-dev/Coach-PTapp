@@ -15,6 +15,7 @@ import zlib from "zlib";
 import { createRequire } from "module";
 import { execSync } from "child_process";
 import * as esbuild from "esbuild";
+import { logs as weekLogs, overrides as weekOv } from "./fixtures/logweek-juha.mjs";
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(path.join(execSync("npm root -g").toString().trim(), "playwright"));
@@ -30,8 +31,8 @@ const roster = [
   { id: ID.juha, name: "Juha", isSelf: false, state: "ok" },
   { id: ID.henna, name: "Henna", isSelf: false, state: "ok" },
 ];
-const logs = { [ID.juha]: rows(read("logs-juha.json")), [ID.henna]: rows(read("logs-henna.json")), [ID.joonatan]: rows(read("logs-joonatan.json")) };
-const overrides = { [ID.juha]: rows(read("overrides-juha.json")), [ID.joonatan]: rows(read("overrides-joonatan.json")) };
+const logs = { [ID.juha]: rows({ ...read("logs-juha.json"), ...weekLogs }), [ID.henna]: rows(read("logs-henna.json")), [ID.joonatan]: rows(read("logs-joonatan.json")) };
+const overrides = { [ID.juha]: rows({ ...read("overrides-juha.json"), ...weekOv }), [ID.joonatan]: rows(read("overrides-joonatan.json")) };
 const programs = read("programs.json");
 
 // 45 nights for Juha, nights 5 and 6 missing (gaps). `worse` pushes the last 7
@@ -194,6 +195,111 @@ for (const [W_, H_] of [[1440, 900], [1280, 800], [390, 844]]) {
   if (W_ === 1440) { await go(ID.juha, "overview", true); await page.screenshot({ path: `${outDir}/overview-worse-1440.png`, fullPage: true }); }
   if (W_ === 390) { await go(ID.juha, "overview", true); await page.screenshot({ path: `${outDir}/overview-390.png`, clip: { x: 0, y: 0, width: 390, height: 520 } }); }
 
+  if (errors.length) fail("page errors at " + tag + ": " + errors.slice(0, 3).join(" | "));
+  await ctx.close();
+}
+
+// ---- Training log: week grid + day card. Clock set to Sun 4 Oct 2026 evening, so the
+// current week is Mon 28 Sep – Sun 4 Oct (the hand-made week) and today has a log row.
+const NOW_LOG = new Date(2026, 9, 4, 20, 0, 0);
+for (const [W_, H_] of [[1440, 900], [390, 844]]) {
+  const tag = `${W_}x${H_}`;
+  report[tag] = report[tag] || {};
+  const ctx = await browser.newContext({ viewport: { width: W_, height: H_ } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (m) => { if (m.type() === "error" && !/Failed to load resource/i.test(m.text())) errors.push(m.text()); });
+  await page.route(/^https?:\/\//, (r) => r.abort());
+  await page.clock.install({ time: NOW_LOG });
+  await page.addInitScript((f) => { window.__FIX = f; }, fix(false));
+  await page.goto(`file://${tmp}/index.html#/${ID.juha}/log`);
+  await page.reload();
+  await page.waitForSelector('[data-part="week-grid"]');
+  await page.waitForTimeout(400);
+
+  const read1 = () => page.evaluate(() => {
+    const grid = document.querySelector('[data-part="week-grid"]');
+    const cols = [...grid.querySelectorAll("button[data-day]")];
+    const card = document.querySelector('[data-part="day-card"]');
+    const sel = cols.find((c) => c.getAttribute("aria-pressed") === "true");
+    const cell = (day, n) => { const c = cols.find((x) => x.dataset.day === day); return c ? getComputedStyle(c.children[n]).backgroundColor : null; };
+    return {
+      title: document.querySelector('[data-part="week-title"]').textContent,
+      cols: cols.length, selected: sel ? sel.dataset.day : null,
+      cardDay: card ? card.dataset.day : null, cardTitle: card ? card.querySelector("h3").lastChild.textContent.trim() : null,
+      rows: card ? card.querySelectorAll('[role="row"]').length - 1 : 0, hasResults: card ? !!card.querySelector('[data-part="results"]') : false,
+      gridScroll: { sw: grid.scrollWidth, cw: grid.clientWidth, overflowX: getComputedStyle(grid).overflowX },
+      pageScroll: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
+      empty: /Nothing was logged this week/.test(document.querySelector('[data-part="log-week"]').textContent),
+      prevDisabled: document.querySelector('[aria-label="Previous week"]').disabled, nextDisabled: document.querySelector('[aria-label="Next week"]').disabled,
+      adherenceLine: !!document.querySelector('[data-part="adherence-compact"]'), oldList: /Show earlier days/.test(document.body.textContent),
+      // cell backgrounds: on = doneBg #1F2A24, off = warnBg #2E2029, neutral/none = panel #151922  (rows: 0 header, 1 session, 2 exercises, 3 sets, 4 mobility, 5 kcal, 6 protein, 7 weigh, 8 knee/alc)
+      monKcal: cell("2026-09-28", 5), wedKcal: cell("2026-09-30", 5), friAlc: cell("2026-10-02", 8), thuEx: cell("2026-10-01", 2), tueEx: cell("2026-09-29", 2), sunSess: cell("2026-10-04", 1),
+      selOutline: sel ? getComputedStyle(sel).boxShadow : null,
+      selHeader: sel ? getComputedStyle(sel.children[0]).borderBottomWidth + " " + getComputedStyle(sel.children[0]).borderBottomColor : null,
+    };
+  });
+  const a = await read1();
+  report[tag].log = a;
+  console.log(`  ${tag} log: "${a.title}" · ${a.cols} columns · selected ${a.selected} · card "${a.cardTitle}" (${a.cardDay}) · grid ${a.gridScroll.sw}/${a.gridScroll.cw} (${a.gridScroll.overflowX}) · page ${a.pageScroll}/${a.innerWidth}`);
+  if (a.title !== "Week 28 Sep – 4 Oct") fail("default week is not the current week: " + a.title);
+  if (a.cols !== 7) fail("expected 7 day columns");
+  if (a.selected !== "2026-10-04" || a.cardDay !== "2026-10-04") fail("default selection should be today, Sun 4 Oct");
+  if (a.cardTitle !== "Cleared — travel") fail("Sun card title: " + a.cardTitle);
+  if (!a.adherenceLine || a.oldList) fail("compact adherence line missing or the old paged list is still there");
+  if (a.pageScroll > a.innerWidth) fail("log page scrolls horizontally at " + tag);
+  if (a.monKcal !== "rgb(31, 42, 36)" || a.wedKcal !== "rgb(46, 32, 41)" || a.friAlc !== "rgb(46, 32, 41)" || a.thuEx !== "rgb(31, 42, 36)" || a.tueEx !== "rgb(21, 25, 34)" || a.sunSess !== "rgb(46, 32, 41)") fail("cell colours: " + JSON.stringify([a.monKcal, a.wedKcal, a.friAlc, a.thuEx, a.tueEx, a.sunSess]));
+  if (!/2px/.test(a.selHeader) || !/inset/.test(a.selOutline || "")) fail("selected column lacks the accent underline / outline: " + a.selHeader + " / " + a.selOutline);
+  if (W_ === 1440) {
+    if (a.gridScroll.sw > a.gridScroll.cw) fail("week grid scrolls at 1440");
+  } else {
+    if (!(a.gridScroll.sw > a.gridScroll.cw) || a.gridScroll.overflowX !== "auto") fail("grid should scroll sideways in its own box at 390");
+    const st = await page.evaluate(() => { const g = document.querySelector('[data-part="week-grid"]'); g.scrollLeft = 9999; return g.scrollLeft; });
+    if (!st) fail("grid did not scroll at 390");
+  }
+  await page.screenshot({ path: `${outDir}/training-log-${W_}.png`, fullPage: true });
+
+  // click another day: Saturday (Session C, Zone 2 cleared)
+  await page.click('button[data-day="2026-10-03"]');
+  await page.waitForTimeout(150);
+  const b = await read1();
+  const sat = await page.evaluate(() => { const c = document.querySelector('[data-part="day-card"]'); return { text: c.innerText.replace(/\n+/g, " | "), pills: c.querySelectorAll('[role="cell"] span').length }; });
+  console.log(`  ${tag} click Sat: selected ${b.selected} · card "${b.cardTitle}" · ${b.rows} exercise rows · ${b.hasResults ? "results strip" : "no strip"}`);
+  if (b.selected !== "2026-10-03" || b.cardDay !== "2026-10-03") fail("clicking Sat did not select it");
+  if (b.cardTitle !== "Session C — Shoulders / Posterior Chain") fail("Sat card title: " + b.cardTitle);
+  if (b.rows !== 8 || !b.hasResults) fail("Sat card should have 8 exercise rows and the results strip: " + b.rows);
+  if (!/Zone 2 cleared/.test(sat.text) || !/8 of 11 exercises logged/.test(sat.text) || !/first log/.test(sat.text) || !/▲ \+5 kg/.test(sat.text)) fail("Sat card text: " + sat.text.slice(0, 600));
+  if (/dismissedWorkouts|oura:|cardio cleared|\bup-\d|\blo-\d|\bmob-\d/.test(sat.text)) fail("internal key in the card: " + sat.text);
+  await page.screenshot({ path: `${outDir}/training-log-sat-${W_}.png`, fullPage: true });
+
+  // keyboard: Tab-focus the Thursday column and press Enter (a real <button>)
+  await page.focus('button[data-day="2026-10-01"]');
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  const k = await read1();
+  if (k.selected !== "2026-10-01" || !/Session B/.test(k.cardTitle)) fail("keyboard selection of Thu failed: " + k.cardTitle);
+  const thu = await page.evaluate(() => document.querySelector('[data-part="day-card"]').innerText);
+  if (!/Cable curl\s*for Ez-bar curl/.test(thu.replace(/\n+/g, " "))) fail("substitution should read 'Cable curl for Ez-bar curl'");
+
+  // weeks: next is disabled in the current week; ‹ moves back
+  if (!a.nextDisabled) fail("next week should be disabled in the current week");
+  await page.click('[aria-label="Previous week"]');
+  await page.waitForTimeout(150);
+  const w1 = await read1();
+  console.log(`  ${tag} ‹ : "${w1.title}" · selected ${w1.selected} · card ${w1.cardDay} · empty ${w1.empty}`);
+  if (w1.title !== "Week 21 Sep – 27 Sep") fail("‹ should show Week 21 Sep – 27 Sep, got " + w1.title);
+  if (!w1.empty || w1.cols !== 7) fail("an empty week should say so and still show 7 columns");
+  await page.click('[aria-label="Previous week"]');
+  await page.waitForTimeout(150);
+  const w2 = await read1();
+  console.log(`  ${tag} ‹‹: "${w2.title}" · selected ${w2.selected} · card "${w2.cardTitle}"`);
+  if (w2.title !== "Week 14 Sep – 20 Sep" || w2.empty || !w2.cardDay) fail("two weeks back should be Week 14 Sep – 20 Sep with a card: " + w2.title);
+  await page.click('[aria-label="Next week"]');
+  await page.click('[aria-label="Next week"]');
+  await page.waitForTimeout(150);
+  const w3 = await read1();
+  if (w3.title !== "Week 28 Sep – 4 Oct" || !w3.nextDisabled || w3.selected !== "2026-10-04") fail("› › should return to this week with Sunday selected: " + w3.title);
   if (errors.length) fail("page errors at " + tag + ": " + errors.slice(0, 3).join(" | "));
   await ctx.close();
 }

@@ -18,6 +18,8 @@ import { Adherence, DayCard, Publisher, PersonPanel, TABS, parseHash } from "./s
 import { buildPersonCtx } from "./src/core/overview.js";
 import { buildRecovery } from "./src/core/recovery.js";
 import { ProgrammeEditor } from "./src/editor.jsx";
+import { LogWeek } from "./src/logweek.jsx";
+import { logs as weekLogs, overrides as weekOv } from "./fixtures/logweek-juha.mjs";
 import { buildNameMap } from "./src/core/names.js";
 
 const ID={juha:"1da21dd7-5f90-423b-ba6c-bf8dc3dd8dee",henna:"5b757e16-813a-46f6-be67-423ff3b093cc",joonatan:"47ba0f5b-9844-4a24-81ca-f561a7b2fc9d"};
@@ -183,6 +185,36 @@ for(const p of edRoster){
     if(tr<1){console.log("    expected tracked cards for Juha");bad++;}
     if(!h.includes("oura · synced")){console.log("    connection tag missing");bad++;}
     if(/NaN|undefined|\[object/.test(h)){console.log("    progress leaks NaN/undefined");bad++;}
+  }
+  {
+    // Training log: LogWeek for Juha's hand-made week (Mon 28 Sep – Sun 4 Oct), and the panel's log tab around it.
+    const p={id:ID.juha,name:"Juha",state:"ok"};
+    const lr=rows(weekLogs), orows=rows(weekOv), jprog=programs.filter(r=>r.assigned_to===ID.juha);
+    const jadh=buildAllAdherence([p],{[ID.juha]:lr},{[ID.juha]:orows},programs);
+    const pbd={}; jadh[ID.juha].days.forEach(d=>pbd[d.date]=d);
+    const jnames=buildNameMap(jprog.map(r=>({definition:r.definition})),orows);
+    const today=new Date(2026,9,5);
+    const h=renderToStaticMarkup(React.createElement(LogWeek,{person:p,logRows:lr,overrideRows:orows,programRows:jprog,pctByDay:pbd,names:jnames,today,initialWeek:new Date(2026,9,1)}));
+    const cols=(h.match(/<button[^>]*data-day="/g)||[]).length;
+    console.log(`  log week Juha 28 Sep–4 Oct: ${cols} day columns, ${h.length} chars`);
+    if(cols!==7){console.log("    expected 7 day columns");bad++;}
+    for(const day of ["2026-09-28","2026-09-29","2026-09-30","2026-10-01","2026-10-02","2026-10-03","2026-10-04"]) if(!h.includes(`data-day="${day}"`)){console.log("    missing column "+day);bad++;}
+    if(!/data-selected="true"/.test(h)){console.log("    no selected column");bad++;}
+    if((h.match(/data-selected="true"/g)||[]).length!==1){console.log("    expected exactly one selected column");bad++;}
+    if(!h.includes("Week 28 Sep – 4 Oct")){console.log("    week title missing");bad++;}
+    if(!h.includes('data-part="day-card"')){console.log("    selected day card missing");bad++;}
+    if(!h.includes("Cleared — travel")){console.log("    default day (latest with data, Sun 4 Oct) should be the cleared travel day");bad++;}
+    if(/>(up|lo|mob|row|db|leg|ab|calf|curl|press|tri)-[\w-]*</.test(h)||/>act-/.test(h)){console.log("    raw ID leaked into the log week");bad++;}
+    if(/NaN|undefined|\[object|dismissedWorkouts|oura:/.test(h)){console.log("    internal text leaked into the log week");bad++;}
+    // the panel's log tab wraps the same thing, with the compact adherence line above it
+    const hp=renderToStaticMarkup(React.createElement(PersonPanel,{tab:"log",person:p,days:[],total:lr.length,adherence:jadh[ID.juha],pctByDay:pbd,recovery:null,connections:[],names:jnames,programs,logRows:lr,overrideRows:orows,ownerId:ID.juha,ctx:null,onPublished:()=>{}}));
+    if(!hp.includes('data-part="log-week"')||!hp.includes('data-part="adherence-compact"')){console.log("    log tab missing the week grid or the compact adherence line");bad++;}
+    if(/Show earlier days/.test(hp)){console.log("    old paged list still present");bad++;}
+    // every day of the week as a card, through the panel's own DayCard export
+    for(const day of ["2026-09-28","2026-09-29","2026-09-30","2026-10-01","2026-10-02","2026-10-03","2026-10-04"]){
+      const html=renderToStaticMarkup(React.createElement(DayCard,{day:{day,log:weekLogs[day]||null,override:weekOv[day]||null,updated:null},scored:pbd[day],names:jnames}));
+      if(/>(up|lo|mob|row|db|leg|ab|calf|curl|press|tri)-[\w-]*</.test(html)||/NaN|undefined|\[object|dismissedWorkouts/.test(html)){console.log("    raw ID or internal text in the card for "+day);bad++;}
+    }
   }
   const paused=renderToStaticMarkup(React.createElement(PersonPanel,{tab:"overview",person:{id:"x",name:"X",state:"paused"},days:[],total:0,programs:[],logRows:[],onPublished:()=>{}}));
   if(!paused.includes("Sharing is paused")){console.log("    paused notice missing");bad++;} else console.log("  paused notice renders");
