@@ -460,6 +460,7 @@ export function dayDetail({ day, logRows, overrideRows, programRows, names, pctB
     title,
     subtitle,
     clearedSlots: d.cleared.map((c) => `${c.label} cleared`),
+    watchLines: watchLines(d._info),
     rows,
     ticked: s ? s.ticked : [],
     notDone: s ? s.notDone : [],
@@ -469,4 +470,27 @@ export function dayDetail({ day, logRows, overrideRows, programRows, names, pctB
     gentler: Boolean(shaped && shaped.gentler),
     hasContent: Boolean(rec) && !(shaped && shaped.isEmpty),
   };
+}
+
+
+/**
+ * What the watch recorded on a day, one line per entry: a session kept on its
+ * planned block (strength / yoga OK) and extras with distance or heart rate.
+ * Wearable-sourced entries only; hand-added extras keep showing by name.
+ */
+export function watchLines(info) {
+  const list = info && Array.isArray(info.allActivities) ? info.allActivities : [];
+  const clock = (m) => `${Math.floor(Math.round(m) / 60)}:${String(Math.round(m) % 60).padStart(2, "0")}`;
+  return list
+    .filter((a) => a && a.source === "wearable")
+    .map((a) => {
+      const out = [a.slot ? `Session · ${a.name}` : a.name];
+      if (typeof a.durationMin === "number") out.push(a.slot ? clock(a.durationMin) : `${Math.round(a.durationMin)} min`);
+      if (typeof a.distanceKm === "number") out.push(`${Math.round(a.distanceKm * 100) / 100} km`);
+      if (typeof a.hrAvg === "number") out.push(`avg ${Math.round(a.hrAvg)}`);
+      if (typeof a.hrMax === "number") out.push(`max ${Math.round(a.hrMax)}`);
+      const v = a.workout && a.workout.vendor;
+      if (v) out.push(v.charAt(0).toUpperCase() + v.slice(1));
+      return out.join(" · ");
+    });
 }

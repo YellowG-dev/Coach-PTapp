@@ -442,6 +442,12 @@ export function DayCardView({ day, scored, names, detail, selected }) {
           </div>
         )}
 
+        {d.watchLines && d.watchLines.length > 0 && (
+          <p data-part="watch-lines" style={{ color: T.textSecondary }} className="text-[13px] pt-3">
+            From the watch: <span style={{ color: T.textPrimary }}>{d.watchLines.join(" | ")}</span>
+          </p>
+        )}
+
         {other.length > 0 && (
           <p style={{ color: T.textSecondary }} className="text-[13px] pt-3">
             Also recorded: <span style={{ color: T.textPrimary }}>{other.join(" · ")}</span>

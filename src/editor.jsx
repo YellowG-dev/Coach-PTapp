@@ -729,6 +729,24 @@ function BlockEditor({ ed, slot, b, blocks }) {
                   onChange={(v) => setCardio({ durationTaskId: v })}
                   options={[["", "—"], ...numberTasks, ...(b.cardio.durationTaskId && !numberTasks.some(([id]) => id === b.cardio.durationTaskId) ? [[b.cardio.durationTaskId, b.cardio.durationTaskId + " (not a number task)"]] : [])]}
                 />
+                <Select
+                  label="Distance field"
+                  value={b.cardio.distanceTaskId || ""}
+                  onChange={(v) => setCardio({ distanceTaskId: v })}
+                  options={[["", "—"], ...numberTasks, ...(b.cardio.distanceTaskId && !numberTasks.some(([id]) => id === b.cardio.distanceTaskId) ? [[b.cardio.distanceTaskId, b.cardio.distanceTaskId + " (not a number task)"]] : [])]}
+                />
+                <Select
+                  label="Avg HR field"
+                  value={b.cardio.hrAvgTaskId || ""}
+                  onChange={(v) => setCardio({ hrAvgTaskId: v })}
+                  options={[["", "—"], ...numberTasks, ...(b.cardio.hrAvgTaskId && !numberTasks.some(([id]) => id === b.cardio.hrAvgTaskId) ? [[b.cardio.hrAvgTaskId, b.cardio.hrAvgTaskId + " (not a number task)"]] : [])]}
+                />
+                <Select
+                  label="Max HR field"
+                  value={b.cardio.hrMaxTaskId || ""}
+                  onChange={(v) => setCardio({ hrMaxTaskId: v })}
+                  options={[["", "—"], ...numberTasks, ...(b.cardio.hrMaxTaskId && !numberTasks.some(([id]) => id === b.cardio.hrMaxTaskId) ? [[b.cardio.hrMaxTaskId, b.cardio.hrMaxTaskId + " (not a number task)"]] : [])]}
+                />
               </div>
               {!zones.length && (
                 <p style={{ color: T.textMuted }} className="text-[11px] mt-1">
