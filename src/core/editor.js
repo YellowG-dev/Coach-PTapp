@@ -25,7 +25,7 @@ const NUMERIC = ["sets", "pctMin", "pctMax"];
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
-export const CARDIO_FIELDS = ["durationMin", "distanceKm", "zoneAvg", "zoneMax", "pace", "note", "durationTaskId"];
+export const CARDIO_FIELDS = ["durationMin", "distanceKm", "zoneAvg", "zoneMax", "pace", "note", "durationTaskId", "distanceTaskId", "hrAvgTaskId", "hrMaxTaskId"];
 const CARDIO_NUMERIC = ["durationMin", "distanceKm"];
 const NEW_EXERCISE_TYPES = ["exercise", "number"];
 
@@ -578,6 +578,7 @@ const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.strin
 const CARDIO_LABEL = {
   durationMin: ["duration", " min"], distanceKm: ["distance", " km"], zoneAvg: ["avg zone", ""], zoneMax: ["max zone", ""],
   pace: ["pace", ""], note: ["note", ""], durationTaskId: ["duration field", ""],
+  distanceTaskId: ["distance field", ""], hrAvgTaskId: ["avg HR field", ""], hrMaxTaskId: ["max HR field", ""],
 };
 const cell = (def, week, dow, slot) => {
   const v = def && def.schedule && def.schedule[week] && def.schedule[week][dow] && def.schedule[week][dow][slot];
