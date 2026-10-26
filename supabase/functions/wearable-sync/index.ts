@@ -158,6 +158,10 @@ const POLAR_SPORT: Record<string, string> = {
   "15": "strengthTraining",// 8/8 matched Oura strengthTraining
   "27": "running",         // 4/4 matched Oura running (likely Polar's trail-run profile)
   "33": "yoga",            // 4/4 matched Oura yoga
+  // Added 26 Oct 2026 (v8) from Ville's 10–14 Oct sessions, same rule:
+  "9": "nordicWalking",    // 1/1 matched Oura nordicWalking (13 Oct)
+  "11": "walking",         // 2/2 matched Oura walking (10–11 Oct); a second walking profile, like 1/27 for running
+  "24": "crossCountrySkiing", // 4/4 matched Oura crossCountrySkiing (10–14 Oct); classic vs skate not yet known
 };
 // Excluded by John, 29 Sep 2026: Ville's Polar sport ids 16 and 83 are not
 // stored at all (never shown, never counted). Unknown ids not listed here are
