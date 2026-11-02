@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Client workspace overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#10131A;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#EEF0F3}
+a{color:#E3A23C;text-decoration:none}a:hover{color:#F0BB63}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; display: flex; background: #10131A; color: #EEF0F3; font-family: 'IBM Plex Sans', system-ui, sans-serif; overflow: hidden;">
+
+  <nav aria-label="Clients" style="width: 248px; flex-shrink: 0; background: #151922; border-right: 1px solid #2A3140; display: flex; flex-direction: column;">
+    <div style="padding: 20px 20px 16px; display: flex; flex-direction: column; gap: 2px;">
+      <div style="font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 18px;">Coach</div>
+      <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #8891A3;">yellowg · 0.8.0</div>
+    </div>
+    <label style="margin: 0 16px 12px; display: flex; flex-direction: column; gap: 4px;">
+      <span style="font-size: 11px; color: #8891A3;">Find client</span>
+      <input type="search" placeholder="Name…" style="background: #10131A; border: 1px solid #2A3140; border-radius: 8px; padding: 8px 10px; color: #EEF0F3; font: inherit; font-size: 13px;">
+    </label>
+    <div style="padding: 0 20px 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8891A3;">Clients · 4</div>
+    <div style="display: flex; flex-direction: column; gap: 2px; padding: 0 8px;">
+      <sc-for list="{{clients}}" as="c" hint-placeholder-count="4">
+        <a href="#" style="{{c.rowStyle}}">
+          <span style="width: 32px; height: 32px; border-radius: 16px; background: #2A3140; display: flex; align-items: center; justify-content: center; font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 13px; color: #EEF0F3;">{{c.initial}}</span>
+          <span style="display: flex; flex-direction: column; flex-grow: 1; gap: 1px;">
+            <span style="font-size: 14px; font-weight: 600; color: #EEF0F3;">{{c.name}}</span>
+            <span style="font-size: 12px; color: #8891A3;">{{c.sub}}</span>
+          </span>
+          <span style="{{c.dotStyle}}" aria-label="{{c.statusLabel}}"></span>
+        </a>
+      </sc-for>
+    </div>
+    <div style="margin-top: auto; padding: 16px 20px; border-top: 1px solid #2A3140; display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
+      <a href="#" style="color: #8891A3;">All clients overview</a>
+      <a href="#" style="color: #8891A3;">Exercise catalogue</a>
+      <a href="#" style="color: #8891A3;">Settings · Sign out</a>
+    </div>
+  </nav>
+
+  <main style="flex-grow: 1; display: flex; flex-direction: column; min-width: 0;">
+    <header style="padding: 20px 32px 0; display: flex; flex-direction: column; gap: 14px; border-bottom: 1px solid #2A3140;">
+      <div style="display: flex; align-items: flex-end; gap: 24px;">
+        <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1;">
+          <h1 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700;">Ville</h1>
+          <div style="font-size: 13px; color: #8891A3;">Run &amp; ultra · Block 1 (28 Sep – 15 Nov 2026) · week 1 of 7 · Oura + Polar connected</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <a href="A2-Programme.dc.html" style="padding: 10px 16px; border-radius: 8px; border: 1px solid #2A3140; color: #EEF0F3; font-size: 13px; font-weight: 600;">Edit programme</a>
+          <a href="A2-Programme.dc.html" style="padding: 10px 16px; border-radius: 8px; background: #E3A23C; color: #14171C; font-size: 13px; font-weight: 600;">New block</a>
+        </div>
+      </div>
+      <div role="tablist" style="display: flex; gap: 28px; font-size: 14px;">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="5">
+          <a href="#" role="tab" style="{{t.style}}">{{t.label}}</a>
+        </sc-for>
+      </div>
+    </header>
+
+    <div style="flex-grow: 1; padding: 24px 32px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; overflow: hidden;">
+
+      <section style="grid-column: span 3; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;">
+        <sc-for list="{{kpis}}" as="k" hint-placeholder-count="4">
+          <div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 14px 16px 18px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px; color: #8891A3; flex-grow: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{k.label}}</span>
+              <select aria-label="{{k.aria}}" value="{{k.id}}" onChange="{{k.onPick}}" style="flex-shrink: 0; max-width: 132px; background: #10131A; border: 1px solid #2A3140; border-radius: 6px; padding: 4px 6px; color: #8891A3; font: inherit; font-size: 11px; cursor: pointer;">
+                <sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+                  <optgroup label="{{g.label}}">
+                    <sc-for list="{{g.items}}" as="o" hint-placeholder-count="4"><option value="{{o.id}}">{{o.short}}</option></sc-for>
+                  </optgroup>
+                </sc-for>
+              </select>
+            </div>
+            <span style="font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 700; color: #EEF0F3;">{{k.value}}</span>
+            <span style="{{k.noteStyle}}">{{k.note}}</span>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="grid-column: span 2; background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 16px;">This week · planned vs done</h2>
+          <span style="font-size: 12px; color: #8891A3;">Week A · 28 Sep – 4 Oct</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px;">
+          <sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+            <div style="{{d.style}}">
+              <span style="font-size: 11px; color: #8891A3;">{{d.dow}}</span>
+              <span style="font-size: 13px; font-weight: 600; color: #EEF0F3;">{{d.plan}}</span>
+              <span style="font-size: 12px; color: #8891A3;">{{d.done}}</span>
+              <span style="{{d.badgeStyle}}">{{d.badge}}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 16px; font-size: 12px; color: #8891A3;">
+          <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #7FB88F; margin-right: 6px;"></span>Done</span>
+          <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: #4CB6C4; margin-right: 6px;"></span>From wearable, to confirm</span>
+          <span><span style="display: inline-block; width: 10px; height: 10px; border-radius: 2px; border: 1px dashed #8891A3; margin-right: 6px;"></span>Planned</span>
+        </div>
+      </section>
+
+      <section style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+        <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 16px;">Needs attention</h2>
+        <sc-for list="{{flags}}" as="f" hint-placeholder-count="3">
+          <div style="display: flex; gap: 10px; align-items: flex-start;">
+            <span style="{{f.dot}}"></span>
+            <span style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 13px; font-weight: 600;">{{f.title}}</span>
+              <span style="font-size: 12px; color: #8891A3;">{{f.detail}}</span>
+            </span>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="grid-column: span 2; background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: baseline; gap: 12px;">
+          <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 16px;">Recent sessions</h2>
+          <a href="#" style="margin-left: auto; font-size: 13px;">Open log</a>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr) 90px 90px 90px 110px; font-size: 11px; color: #8891A3; text-transform: uppercase; letter-spacing: 0.05em; padding: 0 4px;">
+          <span>Day</span><span>Session</span><span>Time</span><span>Distance</span><span>HR avg/max</span><span>Source</span>
+        </div>
+        <sc-for list="{{sessions}}" as="s" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr) 90px 90px 90px 110px; font-size: 13px; padding: 8px 4px; border-top: 1px solid #2A3140; align-items: center;">
+            <span style="color: #8891A3;">{{s.day}}</span><span style="font-weight: 500;">{{s.name}}</span><span style="font-family: 'IBM Plex Mono', monospace;">{{s.time}}</span><span style="font-family: 'IBM Plex Mono', monospace;">{{s.km}}</span><span style="font-family: 'IBM Plex Mono', monospace;">{{s.hr}}</span><span style="{{s.srcStyle}}">{{s.src}}</span>
+          </div>
+        </sc-for>
+      </section>
+
+      <section style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;">
+        <h2 style="margin: 0; font-family: 'Space Grotesk', sans-serif; font-size: 16px;">Recovery · 7 nights</h2>
+        <sc-for list="{{recovery}}" as="r" hint-placeholder-count="4">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <span style="width: 88px; font-size: 12px; color: #8891A3;">{{r.label}}</span>
+            <span style="display: flex; gap: 3px; align-items: flex-end; height: 28px; flex-grow: 1;">
+              <sc-for list="{{r.bars}}" as="b" hint-placeholder-count="7"><span style="{{b.style}}"></span></sc-for>
+            </span>
+            <span style="width: 56px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 13px;">{{r.now}}</span>
+          </div>
+        </sc-for>
+        <span style="font-size: 11px; color: #8891A3;">Oura sleep &amp; readiness · Polar sessions</span>
+      </section>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const row = (on) => 'display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;' + (on ? 'background:#232A36;box-shadow:inset 2px 0 0 #E3A23C;' : '');
+    const dot = (c) => 'width:8px;height:8px;border-radius:4px;background:' + c + ';flex-shrink:0;';
+    const clients = [
+      { name: 'Ville', initial: 'V', sub: 'Block 1 · wk 1/7', on: true, c: '#E3A23C', statusLabel: 'Needs review' },
+      { name: 'Juha', initial: 'J', sub: 'Sept 2026 v3', c: '#7FB88F', statusLabel: 'On track' },
+      { name: 'Henna', initial: 'H', sub: 'Sept 2026', c: '#7FB88F', statusLabel: 'On track' },
+      { name: 'Joonatan', initial: 'J', sub: 'Sept 2026 v2', c: '#C97388', statusLabel: 'Off track' },
+    ].map((x) => ({ ...x, rowStyle: row(x.on), dotStyle: dot(x.c) }));
+    const tabs = ['Overview', 'Training log', 'Recovery', 'Programme', 'Versions'].map((l, i) => ({ label: l, style: 'padding:0 0 12px;font-weight:600;' + (i === 0 ? 'color:#EEF0F3;box-shadow:inset 0 -2px 0 #E3A23C;' : 'color:#8891A3;') }));
+    // Metric catalogue. Daily checks come from THIS client's programme
+    // (tracking), so the third group changes per client; Ville's shown here.
+    const G = '#7FB88F', N = '#8891A3', T = '#4CB6C4';
+    const groups = [
+      { label: 'Training', items: [
+        { id: 'adh', short: 'Adherence', label: 'Adherence this week', value: '[82%]', note: '[9 of 11 planned items]', tone: G },
+        { id: 'cardio', short: 'Cardio min', label: 'Cardio minutes · week', value: '[164]', note: 'Planned + confirmed extras', tone: N },
+        { id: 'run', short: 'Running km', label: 'Running · 7 days', value: '[7.3 km]', note: 'From Polar', tone: N },
+        { id: 'str', short: 'Strength sessions', label: 'Strength sessions · 7 days', value: '[2]', note: '[of 3 planned]', tone: N },
+        { id: 'streak', short: 'Streak', label: 'Training streak', value: '[6 days]', note: 'Skip days pause, never break', tone: N },
+      ] },
+      { label: 'Oura', items: [
+        { id: 'ready', short: 'Readiness', label: 'Readiness · last night', value: '[78]', note: '[▲ 4 vs 7-day avg]', tone: T },
+        { id: 'sleep', short: 'Sleep', label: 'Sleep · last night', value: '[7h12]', note: '[▲ 0h20 vs 7-day avg]', tone: T },
+        { id: 'hrv', short: 'HRV', label: 'HRV · last night', value: '[54 ms]', note: '[▲ 3 vs 7-day avg]', tone: T },
+        { id: 'rhr', short: 'Resting HR', label: 'Resting HR · last night', value: '[48 bpm]', note: '[▼ 1 vs 7-day avg]', tone: T },
+        { id: 'steps', short: 'Steps', label: 'Steps · yesterday', value: '[9 480]', note: '[7-day avg 8 900]', tone: T },
+      ] },
+      { label: 'Daily checks · Ville', items: [
+        { id: 'pk1', short: 'PK1 walk days', label: 'PK1 walk days · 7 days', value: '[4 / 7]', note: 'Daily check', tone: N },
+        { id: 'alc', short: 'Alcohol units', label: 'Alcohol · 7 days', value: '[3 units]', note: 'Reference 14 / week', tone: N },
+        { id: 'weight', short: 'Weight (InBody)', label: 'Weight · latest InBody', value: '[— kg]', note: 'Testing', tone: N },
+      ] },
+    ];
+    const byId = {};
+    groups.forEach((g) => g.items.forEach((o) => { byId[o.id] = o; }));
+    const picked = (this.state && this.state.picked) || ['adh', 'cardio', 'run', 'ready'];
+    const kpis = picked.map((id, i) => {
+      const m = byId[id];
+      return {
+        ...m,
+        aria: 'Choose what box ' + (i + 1) + ' shows',
+        noteStyle: 'font-size:12px;color:' + m.tone + ';',
+        onPick: (e) => { const next = picked.slice(); next[i] = e.target.value; this.setState({ picked: next }); },
+      };
+    });
+    const cell = (s) => {
+      const base = 'display:flex;flex-direction:column;gap:4px;padding:10px;border-radius:10px;min-height:92px;';
+      if (s === 'done') return base + 'background:#1F2A24;border:1px solid #35523F;';
+      if (s === 'confirm') return base + 'background:#1B2A2D;border:1px solid #2E5A60;';
+      if (s === 'today') return base + 'background:#10131A;border:1px solid #E3A23C;';
+      return base + 'background:#10131A;border:1px dashed #3A4254;';
+    };
+    const badge = (s) => 'font-size:11px;font-weight:600;margin-top:auto;color:' + ({ done: '#7FB88F', confirm: '#4CB6C4', today: '#E3A23C' }[s] || '#8891A3') + ';';
+    const week = [
+      { dow: 'Mon 28', plan: 'Strength A', done: '+ extra run 7.3 km', s: 'done', badge: 'Done' },
+      { dow: 'Tue 29', plan: 'Run easy · Yoga', done: 'Strength 60 min (Polar)', s: 'confirm', badge: 'Today · confirm' },
+      { dow: 'Wed 30', plan: 'Bike tempo', done: '', s: 'plan', badge: 'Planned' },
+      { dow: 'Thu 1', plan: 'Strength B', done: '', s: 'plan', badge: 'Planned' },
+      { dow: 'Fri 2', plan: 'Strength C', done: '', s: 'plan', badge: 'Planned' },
+      { dow: 'Sat 3', plan: 'Long run', done: '', s: 'plan', badge: 'Planned' },
+      { dow: 'Sun 4', plan: 'PK1 walk or rest', done: '', s: 'plan', badge: 'Planned' },
+    ].map((d) => ({ ...d, style: cell(d.s), badgeStyle: badge(d.s) }));
+    const flags = [
+      { title: 'Block 1 ends 15 Nov', detail: 'Block 2 not drafted yet · target 8 Nov', c: '#E3A23C' },
+      { title: 'Unplanned session today', detail: 'Tue 29 · strength 60 min (Polar) on a run + yoga day', c: '#4CB6C4' },
+      { title: 'No zone table yet', detail: 'Add PK1/PK2/VK in the editor', c: '#8891A3' },
+    ].map((f) => ({ ...f, dot: 'width:10px;height:10px;border-radius:5px;margin-top:4px;flex-shrink:0;background:' + f.c + ';' }));
+    const src = (x) => 'font-size:12px;color:' + (x === 'Polar' ? '#4CB6C4' : x === 'Logged' ? '#7FB88F' : '#8891A3') + ';';
+    const sessions = [
+      { day: 'Tue 29 Sep', name: 'Strength training', time: '60:36', km: '—', hr: '104/138', src: 'Polar' },
+      { day: 'Mon 28 Sep', name: 'Run · easy', time: '48:36', km: '7.26', hr: '115/126', src: 'Polar' },
+      { day: 'Mon 28 Sep', name: 'Strength A — Legs', time: '56:12', km: '—', hr: '99/126', src: 'Polar' },
+      { day: 'Sun 27 Sep', name: 'Walk', time: '38:18', km: '3.43', hr: '95/115', src: 'Polar' },
+    ].map((s) => ({ ...s, srcStyle: src(s.src) }));
+    const bars = (vals, c) => vals.map((v, i) => ({ style: 'flex-grow:1;border-radius:2px;height:' + v + '%;background:' + (i === vals.length - 1 ? c : '#2A3140') + ';' }));
+    const recovery = [
+      { label: 'Sleep', now: '[7h12]', bars: bars([70, 82, 64, 90, 76, 72, 80], '#4CB6C4') },
+      { label: 'Readiness', now: '[78]', bars: bars([60, 72, 68, 80, 74, 70, 78], '#4CB6C4') },
+      { label: 'HRV', now: '[54]', bars: bars([55, 62, 58, 70, 66, 60, 64], '#4CB6C4') },
+      { label: 'Resting HR', now: '[48]', bars: bars([66, 60, 64, 58, 62, 60, 56], '#4CB6C4') },
+    ];
+    return { clients, tabs, groups, kpis, week, flags, sessions, recovery };
+  }
+}
+</script>
+</body>
+</html>

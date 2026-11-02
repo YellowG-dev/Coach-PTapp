@@ -1,0 +1,32 @@
+  ok   Henna amber-slate: old (no programView) shows the hand-written tab
+  ok   Henna amber-slate: new run really rendered from the delivered definition (cached row has programView)
+  ok   Henna amber-slate: new tab shows the card "Your goals"
+  ok   Henna amber-slate: card bodies open in both (text from inside a card is present)
+  ok   Henna amber-slate: no page errors (old, new)
+  ok   Henna rose-linen: old (no programView) shows the hand-written tab
+  ok   Henna rose-linen: new run really rendered from the delivered definition (cached row has programView)
+  ok   Henna rose-linen: new tab shows the card "Your goals"
+  ok   Henna rose-linen: card bodies open in both (text from inside a card is present)
+  ok   Henna rose-linen: no page errors (old, new)
+  ok   Joonatan amber-slate: old (no programView) shows the hand-written tab
+  ok   Joonatan amber-slate: new run really rendered from the delivered definition (cached row has programView)
+  ok   Joonatan amber-slate: new tab shows the card "What gets tracked"
+  ok   Joonatan amber-slate: card bodies open in both (text from inside a card is present)
+  ok   Joonatan amber-slate: no page errors (old, new)
+  ok   Joonatan rose-linen: old (no programView) shows the hand-written tab
+  ok   Joonatan rose-linen: new run really rendered from the delivered definition (cached row has programView)
+  ok   Joonatan rose-linen: new tab shows the card "What gets tracked"
+  ok   Joonatan rose-linen: card bodies open in both (text from inside a card is present)
+  ok   Joonatan rose-linen: no page errors (old, new)
+  ok   Juha amber-slate: old (no programView) shows the hand-written tab
+  ok   Juha amber-slate: new run really rendered from the delivered definition (cached row has programView)
+  ok   Juha amber-slate: new tab shows the card "Exercise rules"
+  ok   Juha amber-slate: card bodies open in both (text from inside a card is present)
+  ok   Juha amber-slate: no page errors (old, new)
+  ok   Juha rose-linen: old (no programView) shows the hand-written tab
+  ok   Juha rose-linen: new run really rendered from the delivered definition (cached row has programView)
+  ok   Juha rose-linen: new tab shows the card "Exercise rules"
+  ok   Juha rose-linen: card bodies open in both (text from inside a card is present)
+  ok   Juha rose-linen: no page errors (old, new)
+
+phase 4 browser check: 30 passed, 0 failed

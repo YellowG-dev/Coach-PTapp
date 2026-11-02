@@ -1,0 +1,28 @@
+  ok   [rose-linen] Today shows the Walk session
+  ok   [rose-linen] Walk section uses the walk colour (#C9D46B) and the Footprints icon
+  ok   [rose-linen] planned walk: target line and the watch suggestion appear
+  ok   [rose-linen] weekly cardio line is shown (Walk declares a duration task)
+  ok   [rose-linen] yoga on a day with no yoga: under Recorded as "Yoga · not cardio"
+  ok   confirm yoga extra writes one kind:yoga activity
+  ok   the confirmed yoga extra shows 'not cardio' and the weekly cardio line stays 0
+  ok   confirming the planned walk writes minutes to the declared task, and only that adds to the week
+  ok   neither workout is re-offered after reload
+  ok   [rose-linen] no page errors
+  ok   [amber-slate] Today shows the Walk session
+  ok   [amber-slate] Walk section uses the walk colour (#C9D46B) and the Footprints icon
+  ok   [amber-slate] planned walk: target line and the watch suggestion appear
+  ok   [amber-slate] weekly cardio line is shown (Walk declares a duration task)
+  ok   [amber-slate] yoga on a day with no yoga: under Recorded as "Yoga · not cardio"
+  ok   [amber-slate] no page errors
+  ok   planned yoga day: offered inside the yoga block, not under Recorded
+  ok   planned yoga day: a single OK button
+  ok   OK records only the key — no activity, no ticks, no numbers
+  ok   planned yoga day: gone after OK
+  ok   no page errors (yoga planned)
+  ok   empty Walk slot is left out of the Calendar legend
+  ok   and out of the day panel
+  ok   the same empty slot shows on a day that has a value in it (history stays visible)
+  ok   and in the legend while that month has such a day
+  ok   a Walk slot with a block appears in the legend and the day panel
+
+phase 6 client browser check: 26 passed, 0 failed

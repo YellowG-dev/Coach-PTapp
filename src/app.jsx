@@ -1,30 +1,50 @@
-// Coach-PTapp — dashboard v1.
+// Coach-PTapp — dashboard.
 //
-// One client at a time, chosen with the person switcher; below it, that
-// person's logged days newest first, showing exactly what they recorded.
-// No percentages and no adherence scoring: those need program definitions in
-// Supabase, which is Phase 5. Everything here is a raw value the client typed.
+// One client at a time, chosen in the sidebar (top switcher below 1024 px);
+// the client's page is a tab row: Overview, Training log, Progress, Programme,
+// Versions. Client and tab live in the URL hash (#/<personId>/<tab>).
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { currentUser, onAuthChange, sendMagicLink, signOut, isConfigured } from "./core/supabase.js";
-import { loadAll, insertProgramVersion } from "./core/data.js";
+import { loadAll, insertProgramVersion, deleteFutureVersion, canDeleteVersion } from "./core/data.js";
 import { preflight } from "./core/publish.js";
-import { shapeDay, shapeOverride, formatDay, formatSets, labelFor, unitFor } from "./core/shape.js";
+import { CheckResult } from "./check-result.jsx";
+import { ProgrammeEditor } from "./editor.jsx";
 import { buildAllAdherence, pctLabel } from "./core/adherence.js";
 import { buildNameMap } from "./core/names.js";
-import { buildRecovery, connectionLabel, fmtSleep, fmtNum } from "./core/recovery.js";
-import { LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer } from "recharts";
+import { buildRecovery, connectionLabel } from "./core/recovery.js";
+import { Overview } from "./overview.jsx";
+import { buildPersonCtx, needsAttention } from "./core/overview.js";
+import { loadDraft } from "./core/editor.js";
+import { resolveForDate } from "./core/program-schema.js";
+import { Progress } from "./progress.jsx";
+import { LogWeek, DayCardView } from "./logweek.jsx";
 import { THEME as T, FONT_DISPLAY, FONT_BODY, FONT_MONO, COACH_VERSION } from "./config.jsx";
 
-const PAGE = 20; // days rendered before "show earlier"
+export const TABS = [
+  { id: "overview", label: "Overview" },
+  { id: "log", label: "Training log" },
+  // The id stays "recovery" so old #/<person>/recovery links still open it.
+  { id: "recovery", label: "Progress" },
+  { id: "programme", label: "Programme" },
+  { id: "versions", label: "Versions" },
+];
+
+/** "#/<personId>/<tab>" → { personId, tab }; anything unknown is left null. */
+export function parseHash(hash) {
+  const m = /^#\/([^/]+)(?:\/([^/]+))?/.exec(hash || "");
+  const tab = m && TABS.some((t) => t.id === m[2]) ? m[2] : null;
+  return { personId: m ? decodeURIComponent(m[1]) : null, tab };
+}
+
+const readHash = () => (typeof window === "undefined" ? { personId: null, tab: null } : parseHash(window.location.hash));
 
 export default function CoachApp() {
   const [user, setUser] = useState(null);
   const [checking, setChecking] = useState(true);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
-  const [visible, setVisible] = useState(PAGE);
+  const [route, setRoute] = useState(readHash);
   // Bumped after a successful publish so the loader re-runs and the days are
   // re-scored against the new version. A state key rather than re-setting
   // `user` to a fresh object, which worked only as a side effect of the
@@ -62,14 +82,17 @@ export default function CoachApp() {
       if (dead) return;
       setData(result);
       setLoading(false);
-      setSelectedId((prev) => prev || result.roster[0]?.id || null);
     })();
     return () => {
       dead = true;
     };
   }, [user, reloadKey]);
 
-  useEffect(() => setVisible(PAGE), [selectedId]);
+  useEffect(() => {
+    const onHash = () => setRoute(readHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   // EVERY hook must run on EVERY render, so all of them live above the early
   // returns below. The first draft of Phase 6 put these two useMemo calls
@@ -77,7 +100,9 @@ export default function CoachApp() {
   // hooks and the second registered 11. React aborts the whole tree on that
   // mismatch, and the page renders as nothing at all.
   const roster = data?.roster || [];
-  const person = roster.find((p) => p.id === selectedId) || roster[0] || null;
+  const person = roster.find((p) => p.id === route.personId) || roster[0] || null;
+  const tab = route.tab || "overview";
+  const personKey = person ? person.id : null;
   const days = person && data ? mergeDays(data, person.id) : [];
   // Scored for the whole roster at once, not just the selected person: the
   // switcher shows each person's headline number, and computing it per
@@ -99,7 +124,7 @@ export default function CoachApp() {
   const recovery = useMemo(() => {
     if (!data || !data.ok || !person) return null;
     const w = data.wearables || {};
-    return buildRecovery((w.days || {})[person.id] || [], (w.workouts || {})[person.id] || []);
+    return buildRecovery((w.days || {})[person.id] || [], (w.workouts || {})[person.id] || [], person.id);
   }, [data, person]);
   const connections = useMemo(() => {
     if (!data || !data.ok || !person) return [];
@@ -113,6 +138,35 @@ export default function CoachApp() {
     return buildNameMap(versions, (data.overrides || {})[person.id]);
   }, [data, person]);
 
+  const ctx = useMemo(() => {
+    if (!data || !data.ok || !person || person.state === "paused") return null;
+    return buildPersonCtx(data, person, {
+      today: new Date(),
+      recovery,
+      adherence: personAdherence,
+      names,
+    });
+  }, [data, person, recovery, personAdherence, names]);
+  // Sidebar dots: one attention check per person, scored once per load.
+  // Drafts are read at render time (below) so a saved draft shows at once.
+  const attention = useMemo(() => {
+    const out = {};
+    if (!data || !data.ok) return out;
+    const today = new Date();
+    roster.forEach((p) => {
+      if (p.state === "paused") return;
+      const w = data.wearables || {};
+      const c = buildPersonCtx(data, p, {
+        today,
+        recovery: buildRecovery((w.days || {})[p.id] || [], (w.workouts || {})[p.id] || [], p.id),
+        adherence: adherence[p.id] || null,
+        names: {},
+      });
+      out[p.id] = { ctx: c, count: needsAttention(c).length };
+    });
+    return out;
+  }, [data, roster, adherence]);
+
   if (checking) {
     return (
       <Shell>
@@ -122,42 +176,87 @@ export default function CoachApp() {
   }
   if (!user) return <SignIn />;
 
+  const goto = (personId, t) => {
+    window.location.hash = `#/${encodeURIComponent(personId)}/${t}`;
+  };
+  const dots = {};
+  roster.forEach((p) => {
+    if (p.state === "paused") dots[p.id] = "paused";
+    else {
+      const a = attention[p.id];
+      const draft = a ? loadDraft(safeStorage(), p.id) : null;
+      dots[p.id] = a && (a.count > 0 || draft) ? "attention" : "ok";
+    }
+  });
+
+  if (!data || !data.ok) {
+    return (
+      <Shell>
+        <Header email={user.email} />
+        {loading && <Muted>Loading training data…</Muted>}
+        {data && !data.ok && <Problem>{data.error}</Problem>}
+      </Shell>
+    );
+  }
+
   return (
-    <Shell>
-      <Header email={user.email} />
-
-      {loading && <Muted>Loading training data…</Muted>}
-      {data && !data.ok && <Problem>{data.error}</Problem>}
-
-      {data && data.ok && (
-        <>
-          <Switcher roster={roster} selectedId={person ? person.id : null} onSelect={setSelectedId} />
+    <Shell wide>
+      <div className="lg:flex lg:min-h-screen">
+        <Sidebar
+          roster={roster}
+          selectedId={person ? person.id : null}
+          onSelect={(id) => goto(id, tab)}
+          dots={dots}
+          email={user.email}
+        />
+        <main className="flex-1 min-w-0 px-5 py-6 lg:px-8">
+          {loading && <Muted>Loading training data…</Muted>}
           {person && (
-            <PersonPanel
-              person={person}
-              days={days.slice(0, visible)}
-              total={days.length}
-              adherence={personAdherence}
-              pctByDay={pctByDay}
-              recovery={recovery}
-              connections={connections}
-              names={names}
-              programs={data.programs || []}
-              logRows={(data.logs || {})[person.id] || []}
-              ownerId={user.id}
-              onPublished={() => setReloadKey((k) => k + 1)}
-              onMore={() => setVisible((v) => v + PAGE)}
-            />
+            <>
+              <ClientHeader person={person} programs={data.programs || []} connections={connections} />
+              <TabRow tab={tab} onSelect={(t) => goto(person.id, t)} />
+              <PersonPanel
+                key={person.id}
+                tab={tab}
+                person={person}
+                days={days}
+                total={days.length}
+                adherence={personAdherence}
+                pctByDay={pctByDay}
+                recovery={recovery}
+                connections={connections}
+                names={names}
+                programs={data.programs || []}
+                logRows={(data.logs || {})[person.id] || []}
+                overrideRows={(data.overrides || {})[person.id] || []}
+                ownerId={user.id}
+                ctx={ctx ? { ...ctx, draft: draftInfo(person.id) } : null}
+                onPublished={() => setReloadKey((k) => k + 1)}
+              />
+            </>
           )}
-        </>
-      )}
 
-      <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
-        Coach dashboard {COACH_VERSION} · logged values with adherence scored against the program in force on each
-        day. Exercise names still show as IDs.
-      </p>
+          <p style={{ color: T.textMuted }} className="text-[11px] mt-8">
+            Coach dashboard {COACH_VERSION} · laptop layout: sidebar per client, Overview first. Logged values with
+            adherence scored against the program in force on each day. Exercise names still show as IDs.
+          </p>
+        </main>
+      </div>
     </Shell>
   );
+}
+
+function safeStorage() {
+  try {
+    return window.localStorage;
+  } catch (e) {
+    return { getItem: () => null };
+  }
+}
+
+function draftInfo(personId) {
+  const d = loadDraft(safeStorage(), personId);
+  return d ? { savedAt: d.savedAt } : null;
 }
 
 /* ------------------------------- data joins ------------------------------- */
@@ -257,27 +356,121 @@ function Header({ email }) {
   );
 }
 
-function Switcher({ roster, selectedId, onSelect }) {
+const DOT = {
+  ok: { colour: () => T.good, text: "Nothing needs attention" },
+  attention: { colour: () => T.accent, text: "Needs attention" },
+  paused: { colour: () => T.textMuted, text: "Sharing paused" },
+};
+
+/** Column sized to its longest name (128–200 px) at >= 1024 px; below that it is the old top switcher. */
+function Sidebar({ roster, selectedId, onSelect, dots, email }) {
   return (
-    <div className="flex gap-2 flex-wrap mb-5">
-      {roster.map((p) => {
-        const active = p.id === selectedId;
+    <aside
+      style={{ borderColor: T.border, background: T.bg }}
+      className="px-5 py-4 border-b lg:border-b-0 lg:border-r lg:w-fit lg:min-w-[128px] lg:max-w-[200px] lg:shrink-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col lg:px-2 lg:py-5"
+    >
+      <h1 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold lg:mb-4 lg:px-2.5">
+        Coach
+      </h1>
+      <nav aria-label="Clients" className="flex gap-2 flex-wrap mt-3 lg:mt-0 lg:block lg:space-y-1 lg:flex-1 lg:overflow-y-auto">
+        {roster.map((p) => {
+          const active = p.id === selectedId;
+          const dot = DOT[dots[p.id] || "ok"];
+          return (
+            <button
+              key={p.id}
+              onClick={() => onSelect(p.id)}
+              aria-current={active ? "page" : undefined}
+              title={p.name}
+              style={{
+                background: active ? T.rowSelected : "transparent",
+                boxShadow: active ? `inset 2px 0 0 ${T.accent}` : "none",
+                color: T.textPrimary,
+              }}
+              className="text-left rounded-lg px-2.5 py-2 lg:block lg:w-full focus:outline-none focus-visible:ring-2"
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  style={{ background: dot.colour() }}
+                  className="inline-block w-2 h-2 rounded-full shrink-0"
+                />
+                <span className="sr-only">{dot.text}: </span>
+                <span className="text-sm font-semibold truncate">{p.name}</span>
+                {p.isSelf && <span style={{ color: T.textMuted }} className="text-[11px] shrink-0">(you)</span>}
+                {p.state === "paused" && <span style={{ color: T.textMuted }} className="text-[11px] shrink-0">paused</span>}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-4 lg:mt-3 flex items-center justify-between gap-3 lg:block lg:px-0.5">
+        <p style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[10px]">
+          Coach {COACH_VERSION}
+        </p>
+        <button
+          onClick={signOut}
+          title={email}
+          style={{ borderColor: T.border, color: T.textSecondary }}
+          className="shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg border lg:mt-2 lg:w-full focus:outline-none focus-visible:ring-2"
+        >
+          Sign out
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+function ClientHeader({ person, programs, connections }) {
+  const rows = programs.filter((r) => r.assigned_to === person.id && r.definition);
+  const v = resolveForDate(rows, new Date());
+  return (
+    <div className="mb-4">
+      <h2 style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-2xl font-bold">
+        {person.name}
+      </h2>
+      <div className="flex items-center gap-2 flex-wrap mt-1">
+        <span style={{ color: T.textSecondary }} className="text-xs">
+          {v ? `${v.name} · from ${fromLabel(v.effective_from)}` : "No programme assigned"}
+        </span>
+        {person.state !== "paused" &&
+          connections.map((c) => {
+            const l = connectionLabel(c);
+            return (
+              <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
+                {c.vendor} · {l.text}
+              </Tag>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
+const fromLabel = (v) => (v === "-infinity" || v == null ? "the start" : String(v).slice(0, 10));
+
+function TabRow({ tab, onSelect }) {
+  return (
+    <div
+      role="tablist"
+      style={{ boxShadow: `inset 0 -1px 0 ${T.border}` }}
+      className="flex gap-1 mb-4 overflow-x-auto overflow-y-hidden lg:overflow-visible"
+    >
+      {TABS.map((t) => {
+        const active = t.id === tab;
         return (
           <button
-            key={p.id}
-            onClick={() => onSelect(p.id)}
+            key={t.id}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onSelect(t.id)}
             style={{
-              background: active ? T.accent : "transparent",
-              color: active ? T.onAccent : T.textSecondary,
-              borderColor: active ? T.accent : T.border,
+              color: active ? T.textPrimary : T.textSecondary,
+              borderColor: active ? T.accent : "transparent",
             }}
-            className="text-sm font-semibold px-3.5 py-2 rounded-xl border text-left focus:outline-none focus-visible:ring-2"
+            className="shrink-0 text-sm font-semibold px-3 py-2 border-b-2 focus:outline-none focus-visible:ring-2"
           >
-            <span>{p.name}</span>
-            {p.isSelf && <span style={{ opacity: 0.65 }}> (you)</span>}
-            <span style={{ fontFamily: FONT_MONO, opacity: 0.75 }} className="block text-[11px] font-normal">
-              {p.state === "paused" ? "sharing paused" : `${p.days} ${p.days === 1 ? "day" : "days"}`}
-            </span>
+            {t.label}
           </button>
         );
       })}
@@ -285,7 +478,7 @@ function Switcher({ roster, selectedId, onSelect }) {
   );
 }
 
-function PersonPanel({ person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, ownerId, onPublished, onMore }) {
+export function PersonPanel({ tab = "overview", person, days, total, adherence, pctByDay, recovery, connections, names, programs, logRows, overrideRows, ownerId, ctx, onPublished }) {
   // The three states that must never be confused with one another.
   if (person.state === "paused") {
     return (
@@ -300,48 +493,149 @@ function PersonPanel({ person, days, total, adherence, pctByDay, recovery, conne
   return (
     <>
       {person.state === "unnamed" && (
-        <Notice tone="warn" title="No profile row">
-          This person is sharing with you, but has no row in profiles, so there is no name to show. Their data below is
-          complete — only the label is missing.
-        </Notice>
+        <div className="mb-3">
+          <Notice tone="warn" title="No profile row">
+            This person is sharing with you, but has no row in profiles, so there is no name to show. Their data below is
+            complete — only the label is missing.
+          </Notice>
+        </div>
       )}
 
-      {/* Above the logged days on purpose: a person can have wearable data
-          before they have logged a single session, and that is worth seeing. */}
-      <Recovery recovery={recovery} connections={connections} person={person} />
+      {tab === "overview" && ctx && <Overview key={person.id} ctx={ctx} />}
 
-      {total === 0 ? (
-        <Notice tone="quiet" title="No days logged yet">
-          {person.name} is sharing with you, and nothing has been recorded so far.
-        </Notice>
-      ) : (
+      {tab === "log" &&
+        (total === 0 ? (
+          <Notice tone="quiet" title="No days logged yet">
+            {person.name} is sharing with you, and nothing has been recorded so far.
+          </Notice>
+        ) : (
+          <>
+            <Adherence person={person} adherence={adherence} compact />
+            <LogWeek
+              key={person.id}
+              person={person}
+              logRows={logRows || []}
+              overrideRows={overrideRows || []}
+              programRows={(programs || []).filter((r) => r.assigned_to === person.id)}
+              pctByDay={pctByDay}
+              names={names}
+            />
+          </>
+        ))}
+
+      {tab === "recovery" && ctx && (
+        <Progress key={person.id} ctx={ctx} recovery={recovery} connections={connections} names={names} />
+      )}
+
+      {tab === "programme" && (
+        <ProgrammeEditor
+          person={person}
+          programs={programs}
+          logRows={logRows}
+          ownerId={ownerId}
+          onPublished={onPublished}
+          defaultOpen
+        />
+      )}
+
+      {tab === "versions" && (
         <>
-          <Adherence person={person} adherence={adherence} />
-          <div className="space-y-3">
-            {days.map((d) => (
-              <DayCard key={d.day} day={d} scored={pctByDay ? pctByDay[d.day] : null} names={names} />
-            ))}
-          </div>
-          {days.length < total && (
-            <button
-              onClick={onMore}
-              style={{ borderColor: T.border, color: T.textSecondary }}
-              className="w-full mt-3 text-xs font-semibold py-2 rounded-lg border focus:outline-none focus-visible:ring-2"
-            >
-              Show earlier days · {total - days.length} more
-            </button>
-          )}
+          <VersionsTable person={person} programs={programs} onDeleted={onPublished} />
+          <Publisher
+            person={person}
+            programs={programs}
+            logRows={logRows}
+            ownerId={ownerId}
+            onPublished={onPublished}
+            defaultOpen={false}
+          />
         </>
       )}
-
-      <Publisher
-        person={person}
-        programs={programs}
-        logRows={logRows}
-        ownerId={ownerId}
-        onPublished={onPublished}
-      />
     </>
+  );
+}
+
+function VersionsTable({ person, programs, onDeleted }) {
+  const [pending, setPending] = useState(null); // id awaiting confirmation
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, text }
+  const doDelete = async (r) => {
+    setBusy(true);
+    const res = await deleteFutureVersion(r.id);
+    setBusy(false);
+    setPending(null);
+    setMsg(res.ok ? { ok: true, text: `Deleted ${r.id} (effective ${fromLabel(r.effective_from)}).` } : { ok: false, text: "✕ " + res.error });
+    if (res.ok && onDeleted) onDeleted();
+  };
+  const rows = programs
+    .filter((r) => r.assigned_to === person.id)
+    .slice()
+    .sort((a, b) => {
+      const ka = a.effective_from === "-infinity" ? "" : String(a.effective_from);
+      const kb = b.effective_from === "-infinity" ? "" : String(b.effective_from);
+      return ka < kb ? 1 : ka > kb ? -1 : 0;
+    });
+  const inForce = resolveForDate(rows.filter((r) => r.definition), new Date());
+  if (!rows.length) {
+    return (
+      <Notice tone="warn" title="No programme versions">
+        No program row is assigned to {person.name}.
+      </Notice>
+    );
+  }
+  return (
+    <div style={{ background: T.card, borderColor: T.border }} className="rounded-xl border px-4 py-3 overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr style={{ color: T.textMuted }} className="text-[10px] uppercase tracking-wide text-left">
+            <th className="font-normal pb-1">Id</th>
+            <th className="font-normal pb-1">Name</th>
+            <th className="font-normal pb-1">Effective from</th>
+            <th className="font-normal pb-1" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} style={{ borderColor: T.border, color: T.textPrimary }} className="border-t">
+              <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{r.id}</td>
+              <td className="py-1.5 pr-3">{r.name}</td>
+              <td style={{ fontFamily: FONT_MONO }} className="py-1.5 pr-3">{fromLabel(r.effective_from)}</td>
+              <td className="py-1.5">
+                {inForce && inForce.id === r.id && <Tag tone="good">in force</Tag>}
+                {canDeleteVersion(r) && pending !== r.id && (
+                  <button
+                    type="button"
+                    data-action="delete-version"
+                    disabled={busy}
+                    onClick={() => { setMsg(null); setPending(r.id); }}
+                    style={{ borderColor: T.warn, color: T.warn }}
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2"
+                  >
+                    Delete version
+                  </button>
+                )}
+                {pending === r.id && (
+                  <span data-part="delete-confirm" style={{ color: T.warn }} className="text-[11px] inline-flex flex-wrap items-center gap-2">
+                    Delete {r.id}, effective {fromLabel(r.effective_from)}? It has not started; nothing has been scored against it.
+                    <button type="button" data-action="delete-confirm" disabled={busy} onClick={() => doDelete(r)}
+                            style={{ borderColor: T.warn, color: T.warn }}
+                            className="font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2">
+                      {busy ? "Deleting…" : "Confirm"}
+                    </button>
+                    <button type="button" disabled={busy} onClick={() => setPending(null)}
+                            style={{ borderColor: T.border, color: T.textSecondary }}
+                            className="font-semibold px-2 py-0.5 rounded-md border focus:outline-none focus-visible:ring-2">
+                      Cancel
+                    </button>
+                  </span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {msg && <p style={{ color: msg.ok ? T.good : T.warn }} className="text-[11px] mt-2">{msg.text}</p>}
+    </div>
   );
 }
 
@@ -424,9 +718,6 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
     );
   }
 
-  const findings = result && result.validation ? result.validation.findings : [];
-  const info = findings.filter((f) => f.severity === "info");
-
   return (
     <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mt-4">
       <div className="flex items-baseline justify-between gap-3">
@@ -444,9 +735,9 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
 
       <p style={{ color: T.textMuted }} className="text-[11px] mt-1 leading-relaxed">
         This adds a new row; the version in force is never overwritten.{" "}
-        <strong style={{ color: T.textSecondary }}>It does not change {person.name}'s app</strong> — the client apps
-        build their program in from their own repo and do not read this table. What it changes today is how the days
-        above are scored from the effective date onward.
+        <strong style={{ color: T.textSecondary }}>It changes {person.name}'s app</strong> — from the effective date
+        their app runs this version (Today offers them the reload; it never swaps a session mid-workout), and the days
+        above are scored against it from that date onward.
       </p>
 
       <label style={{ color: T.textSecondary }} className="text-[11px] block mt-3 mb-1">
@@ -493,46 +784,7 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
         )}
       </div>
 
-      {result && (
-        <div className="mt-3 space-y-2">
-          {result.inForce && (
-            <p style={{ color: T.textMuted }} className="text-[11px]">
-              Replacing from {when} onward: {result.inForce.name} (effective {String(result.inForce.effective_from)})
-            </p>
-          )}
-          {result.blocking.map((b, i) => (
-            <p key={"b" + i} style={{ color: T.warn }} className="text-[11px] leading-relaxed">
-              ✕ {b}
-            </p>
-          ))}
-          {result.warnings.map((w, i) => (
-            <p key={"w" + i} style={{ color: T.accent }} className="text-[11px] leading-relaxed">
-              ⚠ {w}
-            </p>
-          ))}
-          {result.ok && (
-            <p style={{ color: T.good }} className="text-[11px]">
-              ✓ Checks passed. {info.length} informational change{info.length === 1 ? "" : "s"}
-              {result.validation ? ` · ${result.validation.summary.idsAfter} IDs, ${result.validation.summary.idsLogged} seen in history` : ""}.
-              {result.row ? ` Will insert as ${result.row.id}.` : ""}
-            </p>
-          )}
-          {info.length > 0 && (
-            <details>
-              <summary style={{ color: T.textSecondary }} className="text-[11px] cursor-pointer">
-                Show {info.length} informational finding{info.length === 1 ? "" : "s"}
-              </summary>
-              <div className="mt-1 space-y-0.5">
-                {info.map((f, i) => (
-                  <p key={i} style={{ color: T.textMuted }} className="text-[10px]">
-                    {f.message}
-                  </p>
-                ))}
-              </div>
-            </details>
-          )}
-        </div>
-      )}
+      <CheckResult result={result} when={when} />
 
       {published && (
         <p
@@ -544,154 +796,6 @@ export function Publisher({ person, programs, logRows, ownerId, onPublished, def
             : "✕ " + published.error}
         </p>
       )}
-    </div>
-  );
-}
-
-/* -------------------------------- recovery -------------------------------- */
-
-/**
- * Sleep, readiness and heart data from a connected wearable, next to the
- * adherence numbers — the point being that a poor week with three bad nights
- * behind it is a different conversation from a poor week without them.
- *
- * Nothing here is scored or judged. It reports what the device recorded, with
- * gaps left as gaps: a night the ring missed shows a dash, never a zero.
- */
-export function Recovery({ recovery, connections, person }) {
-  const conns = connections || [];
-  if (!recovery) {
-    if (!conns.length) return null; // nothing connected, nothing to say
-    return (
-      <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
-            Recovery
-          </span>
-          {conns.map((c) => {
-            const l = connectionLabel(c);
-            return (
-              <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
-                {c.vendor} · {l.text}
-              </Tag>
-            );
-          })}
-        </div>
-        <p style={{ color: T.textMuted }} className="text-[11px] mt-2">
-          Connected, but no readings have arrived yet.
-        </p>
-      </div>
-    );
-  }
-
-  const { latest, avg7, avg30, series, sessions30, sessionMinutes30, bySport, nights } = recovery;
-  const hasSeries = series.some((p) => p.readiness != null || p.sleepH != null);
-
-  return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
-      <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span style={{ color: T.textSecondary }} className="text-xs font-semibold">
-          Recovery
-        </span>
-        {conns.map((c) => {
-          const l = connectionLabel(c);
-          return (
-            <Tag key={c.vendor} tone={l.tone === "good" ? "good" : l.tone === "warn" ? "warn" : undefined} mono>
-              {c.vendor} · {l.text}
-            </Tag>
-          );
-        })}
-      </div>
-
-      <div className="flex items-baseline gap-4 flex-wrap">
-        <Figure label={latest ? "Sleep · " + latest.day.slice(5) : "Sleep"} value={fmtSleep(latest?.sleep_minutes)} big />
-        <Figure label="Readiness" value={fmtNum(latest?.readiness)} />
-        <Figure label="Resting HR" value={fmtNum(latest?.resting_hr)} />
-        <Figure label="HRV" value={fmtNum(latest?.hrv)} />
-        <Figure label="Steps" value={latest?.steps != null ? Number(latest.steps).toLocaleString() : "—"} />
-      </div>
-
-      <div className="flex items-center gap-3 flex-wrap mt-2.5">
-        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
-          7-day: {fmtSleep(avg7.sleep)} · readiness {fmtNum(avg7.readiness)} · RHR {fmtNum(avg7.rhr)} · HRV{" "}
-          {fmtNum(avg7.hrv)}
-        </span>
-        <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-[11px]">
-          30-day: {fmtSleep(avg30.sleep)} · readiness {fmtNum(avg30.readiness)} · RHR {fmtNum(avg30.rhr)}
-        </span>
-      </div>
-
-      {hasSeries && (
-        <div style={{ width: "100%", height: 140 }} className="mt-3">
-          <ResponsiveContainer>
-            <LineChart data={series} margin={{ top: 4, right: 8, left: -22, bottom: 0 }}>
-              <CartesianGrid stroke={T.border} strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: T.textMuted, fontSize: 10 }}
-                axisLine={{ stroke: T.border }}
-                tickLine={false}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                yAxisId="left"
-                domain={[0, 100]}
-                tick={{ fill: T.textMuted, fontSize: 10 }}
-                axisLine={false}
-                tickLine={false}
-                width={30}
-              />
-              <YAxis yAxisId="right" orientation="right" hide domain={[0, 12]} />
-              <Tooltip
-                contentStyle={{
-                  background: T.bg,
-                  border: `1px solid ${T.border}`,
-                  borderRadius: 8,
-                  fontFamily: FONT_MONO,
-                  fontSize: 11,
-                }}
-                labelStyle={{ color: T.textSecondary }}
-                formatter={(v, name) => [name === "Sleep (h)" ? `${v} h` : v, name]}
-              />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="readiness"
-                name="Readiness"
-                stroke={T.accent}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="sleepH"
-                name="Sleep (h)"
-                stroke={T.good}
-                strokeWidth={2}
-                dot={false}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      )}
-
-      {sessions30 > 0 && (
-        <p style={{ color: T.textSecondary }} className="text-[11px] mt-2">
-          {sessions30} recorded session{sessions30 === 1 ? "" : "s"} in 30 days · {sessionMinutes30} min ·{" "}
-          <span style={{ color: T.textMuted }}>
-            {bySport.map((s) => `${s.sport} ${s.n}`).join(", ")}
-          </span>
-        </p>
-      )}
-
-      <p style={{ color: T.textMuted }} className="text-[10px] mt-2 leading-relaxed">
-        {nights} night{nights === 1 ? "" : "s"} with a sleep reading in the last 120 days. Amber is readiness, green is
-        sleep hours. Missing nights are gaps, not zeroes. Oura's auto-detected walking and housework are stored but not
-        counted as sessions here.
-      </p>
     </div>
   );
 }
@@ -717,7 +821,7 @@ export function Recovery({ recovery, connections, person }) {
 // Exported for verify-adherence.mjs: the client-facing sharing toggle shipped
 // in Phase 2 proven at the policy level but never once seen rendered, which is
 // the failure mode a render test exists to prevent.
-export function Adherence({ person, adherence }) {
+export function Adherence({ person, adherence, compact }) {
   if (!adherence) return null;
 
   if (adherence.noProgram) {
@@ -733,6 +837,32 @@ export function Adherence({ person, adherence }) {
 
   const s = adherence.summary;
   const cats = Object.keys(s.byCat);
+
+  // One line above the week grid: the same numbers, without the per-category bars.
+  if (compact) {
+    return (
+      <div
+        data-part="adherence-compact"
+        style={{ background: T.card, borderColor: T.border }}
+        className="rounded-xl border px-4 py-2 mb-4 flex items-baseline gap-x-5 gap-y-1 flex-wrap text-xs"
+      >
+        <span style={{ color: T.textSecondary }}>
+          Last 30 days <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm ml-1">{pctLabel(adherence.last30.avgPct)}</strong>
+        </span>
+        <span style={{ color: T.textSecondary }}>
+          All time <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{pctLabel(s.avgPct)}</strong>
+        </span>
+        <span style={{ color: T.textSecondary }}>
+          Days scored <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{s.scoredDays}</strong>
+        </span>
+        {s.skipDays > 0 && (
+          <span style={{ color: T.textSecondary }}>
+            Cleared <strong style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="ml-1">{s.skipDays}</strong>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border px-4 py-3 mb-3">
@@ -801,249 +931,23 @@ function Figure({ label, value, big }) {
 
 /* -------------------------------- day card -------------------------------- */
 
-export function DayCard({ day, scored, names }) {
-  const shaped = day.log ? shapeDay(day.log) : null;
-  const sched = day.override ? shapeOverride(day.override) : null;
-  const label = formatDay(day.day);
-
-  return (
-    <div style={{ background: T.card, borderColor: T.border }} className="rounded-2xl border overflow-hidden">
-      <div
-        style={{ borderColor: T.border }}
-        className="border-b px-4 py-3 flex items-baseline justify-between gap-3 flex-wrap"
-      >
-        <div>
-          <span style={{ fontFamily: FONT_DISPLAY, color: T.textPrimary }} className="text-sm font-bold">
-            {label.weekday}
-          </span>
-          <span style={{ fontFamily: FONT_MONO, color: T.textMuted }} className="text-xs ml-2">
-            {label.full}
-          </span>
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {scored && scored.skip && <Tag tone="pause">{scored.skip} — cleared</Tag>}
-          {scored && !scored.skip && scored.pct != null && (
-            <Tag tone={scored.pct >= 0.8 ? "good" : scored.pct >= 0.5 ? "accent" : "warn"} mono>
-              {pctLabel(scored.pct)} · {scored.doneCount}/{scored.total}
-            </Tag>
-          )}
-          {scored && !scored.skip && scored.pct == null && <Tag>nothing scheduled</Tag>}
-          {shaped && shaped.gentler && <Tag tone="accent">Gentler week</Tag>}
-          {shaped && shaped.weekType && <Tag>Week {String(shaped.weekType).toUpperCase()}</Tag>}
-          {sched && sched.skip && <Tag tone="warn">Skipped · {sched.skip}</Tag>}
-          {!day.log && <Tag>Rescheduled only</Tag>}
-        </div>
-      </div>
-
-      <div className="px-4 py-3 space-y-3">
-        {sched && !sched.isEmpty && <Schedule sched={sched} />}
-
-        {shaped && shaped.exercises.length > 0 && (
-          <Group title="Exercises">
-            <div className="space-y-2">
-              {shaped.exercises.map((e) => (
-                <Exercise key={e.id} ex={e} names={names} />
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.measurements.length > 0 && (
-          <Group title="Measurements">
-            <Pairs
-              items={shaped.measurements.map((m) => ({
-                key: m.id,
-                label: labelFor(m.id, names),
-                value: unitFor(m.id) ? `${m.value} ${unitFor(m.id)}` : String(m.value),
-              }))}
-            />
-          </Group>
-        )}
-
-        {shaped && shaped.ratings.length > 0 && (
-          <Group title="How it felt">
-            <Pairs
-              items={shaped.ratings.map((r) => ({ key: r.id, label: labelFor(r.id, names), value: String(r.value) }))}
-            />
-          </Group>
-        )}
-
-        {shaped && shaped.ticked.length > 0 && (
-          <Group title="Ticked, no sets logged">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.ticked.map((id) => (
-                <Tag key={id} mono>
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.checks.length > 0 && (
-          <Group title="Daily checks">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.checks.map((id) => (
-                <Tag key={id} mono>
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.unchecked.length > 0 && (
-          <Group title="Opened but left unticked">
-            <div className="flex gap-1.5 flex-wrap">
-              {shaped.unchecked.map((id) => (
-                <Tag key={id} mono tone="quiet">
-                  {labelFor(id, names)}
-                </Tag>
-              ))}
-            </div>
-          </Group>
-        )}
-
-        {shaped && shaped.notes && (
-          <Group title="Note">
-            <p style={{ color: T.textPrimary }} className="text-sm">
-              {shaped.notes}
-            </p>
-          </Group>
-        )}
-
-        {shaped && shaped.unknown && (
-          <Group title="Other recorded fields">
-            <pre
-              style={{ fontFamily: FONT_MONO, color: T.textSecondary, background: T.bg, borderColor: T.border }}
-              className="text-[11px] p-2 rounded-lg border overflow-x-auto"
-            >
-              {JSON.stringify(shaped.unknown, null, 2)}
-            </pre>
-          </Group>
-        )}
-
-        {shaped && shaped.isEmpty && (!sched || sched.isEmpty) && (
-          <p style={{ color: T.textMuted }} className="text-xs">
-            The day was opened but nothing was recorded.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function Schedule({ sched }) {
-  return (
-    <Group title="Schedule changes">
-      <div className="space-y-1">
-        {sched.slots.map((s) => (
-          <Row
-            key={s.slot}
-            left={s.slot}
-            right={s.value === null ? "cleared" : `set to ${s.value}`}
-            dim={s.value === null}
-          />
-        ))}
-        {sched.tests.map((t) => (
-          <Row key={t.name} left={`${t.name} test`} right={t.due ? "marked due" : "marked not due"} dim={!t.due} />
-        ))}
-        {sched.activities.map((a) => (
-          <Row key={a.id || a.name} left="added" right={a.name} />
-        ))}
-      </div>
-    </Group>
-  );
-}
-
-function Exercise({ ex, names }) {
-  const substituted = Boolean(ex.sub);
-  return (
-    <div style={{ borderColor: T.border }} className="border-l-2 pl-3">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
-        <span
-          style={{ fontFamily: FONT_MONO, color: substituted ? T.textMuted : T.textPrimary }}
-          className="text-xs"
-        >
-          {labelFor(ex.id, names)}
-          {substituted && (
-            <>
-              <span style={{ color: T.textMuted }}> → </span>
-              <span style={{ color: T.accentAlt, fontFamily: FONT_BODY }} className="text-sm">
-                {ex.sub.name}
-              </span>
-              {ex.sub.reason && <span style={{ color: T.textMuted }}> ({ex.sub.reason})</span>}
-            </>
-          )}
-        </span>
-        {ex.done === false && <Tag tone="quiet">not ticked</Tag>}
-      </div>
-
-      {formatSets(ex.sets) && (
-        <p style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
-          {formatSets(ex.sets)}
-        </p>
-      )}
-
-      {ex.variants.map((v) => (
-        <p key={v.slug} style={{ fontFamily: FONT_MONO, color: T.textPrimary }} className="text-sm mt-0.5">
-          {formatSets(v.sets)}
-          <span style={{ color: T.textMuted, fontFamily: FONT_BODY }} className="text-xs ml-2">
-            {v.label}
-          </span>
-        </p>
-      ))}
-
-      {ex.note && (
-        <p style={{ color: T.accent }} className="text-xs mt-1">
-          📌 {ex.note}
-        </p>
-      )}
-    </div>
-  );
+/**
+ * One day, in full. The card itself is in logweek.jsx beside the week grid it
+ * is shown under; this keeps the name and props the tests and the panel know.
+ * `detail` and `selected` are optional: without them the card is built from
+ * `day` alone.
+ */
+export function DayCard({ day, scored, names, detail, selected }) {
+  return <DayCardView day={day} scored={scored} names={names} detail={detail} selected={selected} />;
 }
 
 /* ------------------------------- small parts ------------------------------- */
 
-function Shell({ children }) {
+function Shell({ children, wide }) {
   return (
     <div style={{ background: T.bg, fontFamily: FONT_BODY, minHeight: "100vh" }} className="w-full">
       <FontImport />
-      <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>
-    </div>
-  );
-}
-
-function Group({ title, children }) {
-  return (
-    <div>
-      <p style={{ color: T.textSecondary }} className="text-[10px] uppercase tracking-wider mb-1.5">
-        {title}
-      </p>
-      {children}
-    </div>
-  );
-}
-
-function Pairs({ items }) {
-  // A lone value in a two-column grid leaves its number stranded mid-row.
-  const cols = items.length > 1 ? "grid-cols-2" : "grid-cols-1";
-  return (
-    <div className={`grid ${cols} gap-x-4 gap-y-1`}>
-      {items.map((i) => (
-        <Row key={i.key} left={i.label} right={i.value} />
-      ))}
-    </div>
-  );
-}
-
-function Row({ left, right, dim }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2 text-xs">
-      <span style={{ color: T.textSecondary }}>{left}</span>
-      <span style={{ fontFamily: FONT_MONO, color: dim ? T.textMuted : T.textPrimary }} className="shrink-0">
-        {right}
-      </span>
+      {wide ? <div className="w-full">{children}</div> : <div className="max-w-2xl mx-auto px-5 py-8">{children}</div>}
     </div>
   );
 }

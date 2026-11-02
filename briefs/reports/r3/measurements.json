@@ -1,0 +1,144 @@
+{
+ "1440x900": {
+  "board Juha": {
+   "scrollWidth": 774,
+   "clientWidth": 774,
+   "pageScroll": 1440,
+   "innerWidth": 1440,
+   "days": 7,
+   "dayW": 104,
+   "library": 200,
+   "publish": 170,
+   "board": 796,
+   "publishOverflow": false,
+   "boardTop": 241
+  },
+  "board Ville": {
+   "scrollWidth": 774,
+   "clientWidth": 774,
+   "pageScroll": 1440,
+   "innerWidth": 1440,
+   "days": 7,
+   "dayW": 104,
+   "library": 200,
+   "publish": 170,
+   "board": 796,
+   "publishOverflow": false,
+   "boardTop": 235
+  },
+  "sidebar": {
+   "width": 160,
+   "btns": [
+    "Needs attention: Joonatan(you)",
+    "Needs attention: Juha",
+    "Needs attention: Henna",
+    "Needs attention: Ville",
+    "Sharing paused: Kallepaused"
+   ],
+   "signOutTitle": "coach@example.com",
+   "text": "CoachNeeds attention: Joonatan(you)Needs attention: JuhaNeeds attention: HennaNeeds attention: VilleSharing paused: KallepausedCoach 0.10.1Sign out"
+  },
+  "log measurements": {
+   "labelLeft": 209,
+   "valueLeft": 490,
+   "valueRight": 497,
+   "labelRight": 253,
+   "rem": 16,
+   "cardW": 1152,
+   "label": "Alcohol",
+   "value": "0",
+   "maxW": "1152px",
+   "spanRem": 17.56
+  },
+  "progress": {
+   "recovery": 5,
+   "recoveryWithSvg": 5,
+   "tracked": 10,
+   "trackedWithSvg": 10,
+   "stronger": true,
+   "consistency": true,
+   "sports": 4,
+   "heading": "Progress",
+   "tab": "Overview,Training log,Progress,Programme,Versions",
+   "pageScroll": 1440,
+   "innerWidth": 1440,
+   "firstRow": 4,
+   "expectedTracked": 10
+  },
+  "overview": {
+   "states": "done,done,today,plan,plan,plan,plan",
+   "dots": 4
+  }
+ },
+ "1366x768": {
+  "board Juha": {
+   "scrollWidth": 700,
+   "clientWidth": 700,
+   "pageScroll": 1366,
+   "innerWidth": 1366,
+   "days": 7,
+   "dayW": 93,
+   "library": 200,
+   "publish": 170,
+   "board": 722,
+   "publishOverflow": false,
+   "boardTop": 241
+  },
+  "board Ville": {
+   "scrollWidth": 700,
+   "clientWidth": 700,
+   "pageScroll": 1366,
+   "innerWidth": 1366,
+   "days": 7,
+   "dayW": 93,
+   "library": 200,
+   "publish": 170,
+   "board": 722,
+   "publishOverflow": false,
+   "boardTop": 235
+  },
+  "sidebar": {
+   "width": 160,
+   "btns": [
+    "Needs attention: Joonatan(you)",
+    "Needs attention: Juha",
+    "Needs attention: Henna",
+    "Needs attention: Ville",
+    "Sharing paused: Kallepaused"
+   ],
+   "signOutTitle": "coach@example.com",
+   "text": "CoachNeeds attention: Joonatan(you)Needs attention: JuhaNeeds attention: HennaNeeds attention: VilleSharing paused: KallepausedCoach 0.10.1Sign out"
+  },
+  "log measurements": {
+   "labelLeft": 209,
+   "valueLeft": 490,
+   "valueRight": 497,
+   "labelRight": 253,
+   "rem": 16,
+   "cardW": 1142,
+   "label": "Alcohol",
+   "value": "0",
+   "maxW": "1152px",
+   "spanRem": 17.56
+  },
+  "progress": {
+   "recovery": 5,
+   "recoveryWithSvg": 5,
+   "tracked": 10,
+   "trackedWithSvg": 10,
+   "stronger": true,
+   "consistency": true,
+   "sports": 4,
+   "heading": "Progress",
+   "tab": "Overview,Training log,Progress,Programme,Versions",
+   "pageScroll": 1366,
+   "innerWidth": 1366,
+   "firstRow": 4,
+   "expectedTracked": 10
+  },
+  "overview": {
+   "states": "done,done,today,plan,plan,plan,plan",
+   "dots": 4
+  }
+ }
+}

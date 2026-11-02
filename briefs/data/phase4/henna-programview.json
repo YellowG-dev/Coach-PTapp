@@ -1,0 +1,236 @@
+[
+  {
+    "title": "Your goals",
+    "color": "accent",
+    "defaultOpen": true,
+    "body": [
+      {
+        "type": "paragraph",
+        "text": [
+          {
+            "strong": "Strength and toning"
+          },
+          " — and what you said it's really for: ",
+          {
+            "strong": "more energy"
+          },
+          "."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "That's why the app asks about your energy every day. It's the thing we're actually trying to change, so it's the thing worth measuring.",
+        "tone": "secondary"
+      }
+    ]
+  },
+  {
+    "title": "The week",
+    "subtitle": "3 sessions · 30–45 min each",
+    "color": "accent",
+    "body": [
+      {
+        "type": "week",
+        "week": "A"
+      },
+      {
+        "type": "paragraph",
+        "text": "Plus the mobility flow every day, and 10,000 steps. Walking days are flexible — move them around your week.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "a"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "a"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "b"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "b"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "c"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "c"
+        ]
+      }
+    ]
+  },
+  {
+    "title": "How to get stronger",
+    "subtitle": "Reps first, weight last",
+    "color": "accent",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Pick a weight where the last rep feels like you had 2–3 more in you. Then climb, in this order:"
+      },
+      {
+        "type": "list",
+        "ordered": true,
+        "tone": "secondary",
+        "items": [
+          "Add a rep, until every set is at the top of its range",
+          "Slow it down — 3 seconds lowering",
+          "Go single-leg or single-arm",
+          [
+            {
+              "em": "Then"
+            },
+            " add weight, and drop back to the bottom of the range"
+          ]
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "Three steps before the weight changes. Your jumps are big — 6 kg to 8 kg is a third heavier — so this gives your joints time to catch up with your muscles.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Your hands",
+    "subtitle": "Why the program looks the way it does",
+    "color": "accent",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Your grip will often tire before the muscle you're training does. That's not weakness — it's just where your RA sits. So the program routes around it:"
+      },
+      {
+        "type": "list",
+        "tone": "secondary",
+        "items": [
+          "Kettlebells at the chest rather than hanging from one hand",
+          "Ankle weights for single-leg work — no hands involved at all",
+          "A band alternative on every pull and press",
+          "Planks on forearms, push-ups on a raised surface"
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "On days your hands are sore, take the easier option and log it. That's the app working as intended, not a missed session.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Gentler weeks",
+    "color": "accent2",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "You told John things feel more sensitive around your cycle. The switch in Settings trims every session — one less set, lighter, bottom of the rep range. Use it whenever you want it. Training through a rough patch at 70% beats skipping the week entirely."
+      }
+    ]
+  },
+  {
+    "title": "Daily mobility",
+    "subtitle": "~12 min · neck, upper back, rotation",
+    "color": "accent2",
+    "body": [
+      {
+        "type": "mobility"
+      },
+      {
+        "type": "paragraph",
+        "text": "Built around a desk day: opening the upper back, and rotation from three different positions. The breathing at the end counts as your meditation.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Weekly yoga",
+    "subtitle": "Sundays by default · move it from Calendar",
+    "color": "cat:yoga",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Neck, shoulders and upper back — the same areas as the daily flow, with more time."
+      },
+      {
+        "type": "exercises",
+        "group": "yoga",
+        "keys": [
+          "session"
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Walking",
+    "color": "accent2",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "2–3 times a week, 20–40 minutes on the treadmill, plus 10,000 steps a day."
+      },
+      {
+        "type": "paragraph",
+        "text": "No heart-rate numbers — just how it feels:",
+        "tone": "secondary"
+      },
+      {
+        "type": "list",
+        "tone": "secondary",
+        "items": [
+          [
+            {
+              "strong": "Easy"
+            },
+            " — you could hold a conversation"
+          ],
+          [
+            {
+              "strong": "Brisk"
+            },
+            " — short sentences only. This is the useful one."
+          ],
+          [
+            {
+              "strong": "Hard"
+            },
+            " — a few words at a time. Optional."
+          ]
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "When brisk gets easy, add incline before you add speed.",
+        "tone": "muted"
+      }
+    ]
+  }
+]

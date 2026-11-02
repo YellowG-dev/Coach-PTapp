@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Training log — week grid and day card</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600&amp;display=swap">
+<style>
+body{margin:0;background:#10131A}
+a{color:#E3A23C}a:hover{color:#F0B85C}
+</style>
+</helmet>
+<div style="background: #10131A; color: #EEF0F3; font-family: 'IBM Plex Sans', system-ui, sans-serif; padding: 32px 24px 48px; box-sizing: border-box; min-height: 1700px">
+<div style="max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px">
+
+<div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px">
+<div style="display: flex; align-items: center; gap: 12px">
+<button aria-label="Previous week" style="width: 44px; height: 44px; background: #1A1F29; color: #EEF0F3; border: 1px solid #2A3140; border-radius: 8px; font-size: 18px">‹</button>
+<div>
+<div style="font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 600">Week 28 Sep – 4 Oct</div>
+<div style="font-size: 13px; color: #8891A3">Juha · Training log</div>
+</div>
+<button aria-label="Next week" style="width: 44px; height: 44px; background: #1A1F29; color: #EEF0F3; border: 1px solid #2A3140; border-radius: 8px; font-size: 18px">›</button>
+</div>
+<div style="display: flex; gap: 8px; font-size: 12px; color: #8891A3; align-items: center">
+<span style="width: 12px; height: 12px; border-radius: 3px; background: #1F2A24; border: 1px solid #35523F"></span>on target
+<span style="width: 12px; height: 12px; border-radius: 3px; background: #2E2029; border: 1px solid #5A3444; margin-left: 10px"></span>off target
+<span style="width: 12px; height: 12px; border-radius: 3px; background: #151922; border: 1px solid #2A3140; margin-left: 10px"></span>no target
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px">
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 16px"><div style="font-size: 12px; color: #8891A3">Strength</div><div style="font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 600; margin-top: 4px">3 sessions</div><div style="font-size: 12px; color: #8891A3">76 sets · 23,098 kg</div></div>
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 16px"><div style="font-size: 12px; color: #8891A3">Cardio</div><div style="font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 600; margin-top: 4px">74 min</div><div style="font-size: 12px; color: #8891A3">Tennis only · cardio cleared Fri and Sat</div></div>
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 16px"><div style="font-size: 12px; color: #8891A3">Calories / day</div><div style="font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 600; margin-top: 4px">2,547</div><div style="font-size: 12px; color: #8891A3">6 of 7 days within ±10%</div></div>
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 16px"><div style="font-size: 12px; color: #8891A3">Protein ≥ 190 g</div><div style="font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 600; margin-top: 4px">3 / 7 days</div><div style="font-size: 12px; color: #8891A3">low: 160 g on Thu, 140 g on Sat</div></div>
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 12px; padding: 14px 16px"><div style="font-size: 12px; color: #8891A3">Weigh-in</div><div style="font-family: 'Space Grotesk', sans-serif; font-size: 24px; font-weight: 600; margin-top: 4px">87.2 kg</div><div style="font-size: 12px; color: #C97388">+1.0 kg since Mon (86.2)</div></div>
+</div>
+
+<div style="background: #1A1F29; border: 1px solid #2A3140; border-radius: 14px; padding: 8px 12px 12px; overflow-x: auto">
+<div style="display: grid; grid-template-columns: 150px repeat(7, minmax(110px, 1fr)); gap: 6px; min-width: 980px">
+<span></span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">MON 28</span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">TUE 29</span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">WED 30</span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">THU 1</span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">FRI 2</span>
+<span style="padding: 8px; font-size: 12px; color: #8891A3; font-weight: 600">SAT 3</span>
+<span style="padding: 8px; font-size: 12px; color: #EEF0F3; font-weight: 600; border-bottom: 2px solid #E3A23C">SUN 4</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Session</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px"><span style="color: #4CB6C4">●</span> Tennis</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px; color: #8891A3">No session</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px"><span style="color: #E3A23C">●</span> Session A</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px; color: #8891A3">No session</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px"><span style="color: #E3A23C">●</span> Session B</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-size: 13px; color: #C97388">Cleared</span>
+<span style="padding: 10px; border-radius: 8px; background: #232A36; font-size: 13px; outline: 1px solid #E3A23C"><span style="color: #E3A23C">●</span> Session C</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Exercises logged</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">9 / 10</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">7 / 11</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">7 / 11</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Sets · volume</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">32 · 9,009</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">21 · 5,962</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #8891A3">—</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">23 · 8,127</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Mobility (of 11)</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">7</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">0</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">8</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">7</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">3</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">0</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">9</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Calories vs target</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,430 −270</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,400 +50</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,550 −150</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,400 +50</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,650 −50</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">2,950 +600</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">2,450 −250</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Protein (190 g)</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">190</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">180</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">180</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">160</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">190</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">140</span>
+<span style="padding: 10px; border-radius: 8px; background: #1F2A24; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #7FB88F">200</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Weigh-in (kg)</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.2</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.0</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.5</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.4</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.2</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">86.5</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">87.2</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Knee (1–4) · alcohol</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">2 · 0</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">1 · 0</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">2 · 0</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">2 · 0</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">2 · 0</span>
+<span style="padding: 10px; border-radius: 8px; background: #2E2029; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #C97388">2 · 2</span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-family: 'IBM Plex Mono', monospace; font-size: 13px">2 · 0</span>
+
+<span style="padding: 10px 8px; font-size: 13px; color: #8891A3">Note</span>
+<span></span><span></span><span></span><span></span><span></span>
+<span style="padding: 10px; border-radius: 8px; background: #151922; font-size: 13px; color: #E3A23C">✎ 1 note</span>
+<span></span>
+</div>
+</div>
+
+<div style="font-size: 12px; color: #8891A3; font-weight: 600; margin-bottom: -8px">SELECTED DAY · click any column above to change it</div>
+<div style="background: #1A1F29; border: 1px solid #E3A23C; border-radius: 14px; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 16px; padding: 18px 20px; flex-wrap: wrap">
+<div style="width: 52px; text-align: center">
+<div style="font-size: 12px; color: #8891A3; font-weight: 600">SUN</div>
+<div style="font-family: 'Space Grotesk', sans-serif; font-size: 26px; font-weight: 600">4</div>
+<div style="font-size: 12px; color: #8891A3">Oct</div>
+</div>
+<div style="flex: 1 1 360px; min-width: 0">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="width: 10px; height: 10px; border-radius: 3px; background: #E3A23C"></span>
+<span style="font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 600">Session C — Shoulders / Posterior Chain</span>
+</div>
+<div style="font-size: 13px; color: #8891A3; margin-top: 4px">7 of 11 exercises logged · 2 ticked without sets · 2 not done</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<div style="width: 160px; height: 8px; border-radius: 4px; background: #2A3140; overflow: hidden"><div style="width: 64%; height: 100%; background: #E3A23C"></div></div>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #E3A23C">[adherence %]</span>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border-top: 1px solid #2A3140; border-bottom: 1px solid #2A3140; background: #151922">
+<div style="padding: 12px 16px; border-right: 1px solid #2A3140"><div style="font-size: 12px; color: #8891A3">Strength</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; margin-top: 4px">23 sets</div><div style="font-size: 12px; color: #8891A3">8,127 kg volume</div></div>
+<div style="padding: 12px 16px; border-right: 1px solid #2A3140"><div style="font-size: 12px; color: #8891A3">Mobility</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; margin-top: 4px">9 / 11</div><div style="height: 4px; background: #2A3140; border-radius: 2px; margin-top: 6px"><div style="width: 82%; height: 100%; background: #7FB88F; border-radius: 2px"></div></div></div>
+<div style="padding: 12px 16px; border-right: 1px solid #2A3140"><div style="font-size: 12px; color: #8891A3">Calories</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; margin-top: 4px">2,450</div><div style="font-size: 12px; color: #8891A3">target 2,700 · −250</div></div>
+<div style="padding: 12px 16px; border-right: 1px solid #2A3140"><div style="font-size: 12px; color: #8891A3">Protein</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; margin-top: 4px; color: #7FB88F">200 g ✓</div><div style="font-size: 12px; color: #8891A3">target 190 g</div></div>
+<div style="padding: 12px 16px; border-right: 1px solid #2A3140"><div style="font-size: 12px; color: #8891A3">Weigh-in</div><div style="font-family: 'IBM Plex Mono', monospace; font-size: 16px; margin-top: 4px">87.2 kg</div><div style="font-size: 12px; color: #C97388">+0.7 vs yesterday</div></div>
+<div style="padding: 12px 16px"><div style="font-size: 12px; color: #8891A3">Checks</div><div style="font-size: 13px; margin-top: 4px">Knee 2/4 · Alcohol 0</div><div style="font-size: 12px; color: #7FB88F">10k steps ✓ · 3 L water ✓</div></div>
+</div>
+<div style="padding: 8px 20px 18px">
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; font-size: 12px; color: #8891A3; border-bottom: 1px solid #2A3140"><span>Exercise</span><span>Sets (reps × kg)</span><span>Top set</span><span>vs last time</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Dumbbell bench press</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×22</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×30</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×30</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×30</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">8 × 30</span><span style="font-size: 13px; color: #7FB88F">▲ +4 kg (30 Sep: 8×26)</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Seated cable row</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×55</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×55</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×55</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×55</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">10 × 55</span><span style="font-size: 13px; color: #8891A3">[vs previous Session C]</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Barbell overhead press</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×16</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×18</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">8×18</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">8 × 18</span><span style="font-size: 13px; color: #8891A3">[vs previous Session C]</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Single-leg RDL (dumbbell)</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">12×22</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×22</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×22</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">12 × 22</span><span style="font-size: 13px; color: #8891A3">[vs previous Session C]</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Seated calf raise</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">15×45</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">14×45</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">12×45</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">15 × 45</span><span style="font-size: 13px; color: #7FB88F">▲ +3 reps (2 Oct: 12×45)</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Overhead triceps extension <span style="font-size: 12px; color: #4CB6C4">for close-grip press</span></span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">15×45</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">13×45</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">12×45</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">15 × 45</span><span style="font-size: 13px; color: #8891A3">swap</span></div>
+<div style="display: grid; grid-template-columns: 2.2fr 3fr 1.2fr 1.6fr; gap: 12px; padding: 10px 0; align-items: center; border-bottom: 1px solid #222836"><span style="font-size: 14px">Dumbbell lateral raise</span><span style="display: flex; gap: 6px; flex-wrap: wrap; font-family: 'IBM Plex Mono', monospace; font-size: 12px"><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×10</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×10</span><span style="padding: 3px 8px; border-radius: 6px; background: #232A36">10×10</span></span><span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">10 × 10</span><span style="font-size: 13px; color: #8891A3">30 Sep was cable</span></div>
+<div style="display: flex; gap: 16px; flex-wrap: wrap; padding-top: 12px; font-size: 13px">
+<span style="color: #8891A3">Ticked, no sets: <span style="color: #EEF0F3">Weighted crunch, Weighted side plank hip lift</span></span>
+<span style="color: #8891A3">Not done: <span style="color: #C97388">Incline dumbbell curl, Face pull</span></span>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1700}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -19,7 +19,7 @@ export const AUTH_STORAGE_KEY = "ptAppCoach_auth";
 
 // Versioned independently of the client apps. The three of them share one
 // APP_VERSION line because they ship the same engine; this one does not.
-export const COACH_VERSION = "0.5.0";
+export const COACH_VERSION = "0.12.2";
 
 // Same palette and type as the client apps, so a client's day looks the same
 // to the coach as it does to them. Kept as plain values rather than Tailwind
@@ -28,6 +28,17 @@ export const THEME = {
   bg: "#10131A",
   card: "#1A1F29",
   border: "#2A3140",
+  // Edges of sections and movable objects (R3): #2A3140 on #1A1F29 barely shows.
+  borderStrong: "#3A4254",
+  // Panel background of the Programme tab's sections (A3 design).
+  panel: "#151922",
+  // A1 overview: selected client row, and a day cell whose work is done.
+  rowSelected: "#232A36",
+  doneBg: "#1F2A24",
+  doneBorder: "#35523F",
+  // Training log week grid: background of an "off target" cell, the counterpart
+  // of doneBg (on target). Text on it is `warn`.
+  warnBg: "#2E2029",
   textPrimary: "#EEF0F3",
   textSecondary: "#8891A3",
   textMuted: "#5C6577",

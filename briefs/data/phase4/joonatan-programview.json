@@ -1,0 +1,157 @@
+[
+  {
+    "title": "The week",
+    "subtitle": "4 sessions · Push / Pull / Legs / Full",
+    "color": "accent",
+    "defaultOpen": true,
+    "body": [
+      {
+        "type": "week",
+        "week": "A"
+      },
+      {
+        "type": "paragraph",
+        "text": "Every muscle group gets hit twice a week — the classic split plus a full-body second exposure. Mobility flow daily, on training days and rest days alike.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "push"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "push"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "pull"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "pull"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "legs"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "legs"
+        ]
+      }
+    ]
+  },
+  {
+    "titleFrom": {
+      "group": "strength",
+      "key": "full"
+    },
+    "color": "accent",
+    "body": [
+      {
+        "type": "exercises",
+        "group": "strength",
+        "keys": [
+          "full"
+        ]
+      }
+    ]
+  },
+  {
+    "title": "Progression",
+    "subtitle": "Double progression",
+    "color": "accent",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "Work at the given RPE. When every set hits the top of the rep range at the target RPE, add the smallest increment available and drop back to the bottom of the range."
+      },
+      {
+        "type": "paragraph",
+        "text": "RPE 7 means roughly 3 reps left in the tank; RPE 9 means about 1. If a session feels like a 10 across the board, that's a signal to use the deload switch rather than push through.",
+        "tone": "muted"
+      }
+    ]
+  },
+  {
+    "title": "Deload",
+    "color": "accent2",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": "The deload toggle on the Calendar week removes one set per exercise — about a quarter to a third of the volume — while keeping the weight the same. Roughly every fourth week, or whenever sleep and energy have been poor for a stretch."
+      }
+    ]
+  },
+  {
+    "title": "Daily mobility",
+    "subtitle": "~10 min",
+    "color": "cat:mobility",
+    "body": [
+      {
+        "type": "mobility"
+      }
+    ]
+  },
+  {
+    "title": "What gets tracked",
+    "color": "cat:check",
+    "body": [
+      {
+        "type": "paragraph",
+        "text": [
+          {
+            "strong": "Bodyweight"
+          },
+          " — watch the 7-day rolling average, not the daily number."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": [
+          {
+            "strong": "Sleep"
+          },
+          " — the single best predictor of whether a session will go well."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": [
+          {
+            "strong": "Loads"
+          },
+          " — weight and reps per set. This is what builds the strength chart in Progress."
+        ]
+      },
+      {
+        "type": "paragraph",
+        "text": "Nutrition tracking and testing are switched off. Say the word if you want either turned on.",
+        "tone": "muted"
+      }
+    ]
+  }
+]

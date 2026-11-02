@@ -8,6 +8,13 @@ import { getISOWeek, dateKey, daysBetween } from "./dates.js";
  * program, get a different app — same scheduling, same history maths, same
  * override system.
  *
+ * The four date-bearing functions — resolveSchedule, resolveTesting,
+ * buildSections and buildHistoryRows — also accept a RESOLVER in that
+ * position: a function (date) -> program. That is how a past day is scored
+ * against the programme version that was in force when it was logged, rather
+ * than against whatever is running today. An object argument behaves exactly
+ * as it always has, so every existing caller is untouched.
+ *
  * v2 additions, all opt-in via program data so existing programs behave
  * exactly as before:
  *   - skip days        overrides[day].skip = "sick" | "travel" | "injured"
@@ -42,11 +49,18 @@ export function skipLabel(reason) {
  * means "the user moved or cleared this", which is why hasOwnProperty is used
  * rather than a truthiness check — clearing a session must beat the template.
  *
- * A skip clears every scheduled slot and every extra activity. It does NOT
- * erase what was there: `scheduled` still reports it, so unsetting the skip
- * restores the day exactly.
+ * A skip clears every scheduled slot but NOT extra activities: extras logged on
+ * a sick/travel/injured day still show and still count toward the weekly
+ * cardio total (decided 1 Oct 2026). A skip day with extras is still not a
+ * training day — `isTrainingDay` is computed from slots only when `skip` is
+ * set. Nothing is erased: `scheduled` still reports the cleared slots, so
+ * unsetting the skip restores the day exactly.
  */
-export function resolveSchedule(date, weekOverride, overrides, program) {
+export function resolveSchedule(date, weekOverride, overrides, programOrFn) {
+  // `programOrFn` may be a resolver: (date) -> program. A day must be scored
+  // against the programme in force on THAT date, not the one running today.
+  // Passing a plain object behaves exactly as before.
+  const program = typeof programOrFn === "function" ? programOrFn(date) : programOrFn;
   const auto = getISOWeek(date) % 2 === 0 ? "A" : "B";
   const weekType = weekOverride === "auto" ? auto : weekOverride;
   const key = dateKey(date);
@@ -76,7 +90,11 @@ export function resolveSchedule(date, weekOverride, overrides, program) {
   }
 
   const allActivities = Array.isArray(ov.activities) ? ov.activities : [];
-  const activities = skip ? [] : allActivities;
+  // An entry with a `slot` is a wearable session recorded onto a planned block
+  // (a strength or yoga OK): shown inside that block's card, never an extra, so
+  // it makes no "Extra Activity" section and no tick.
+  const activities = allActivities.filter((a) => !(a && a.slot));
+  const sessions = allActivities.filter((a) => a && a.slot);
   const note = ov.note !== undefined ? ov.note : base.note || null;
 
   return {
@@ -89,9 +107,12 @@ export function resolveSchedule(date, weekOverride, overrides, program) {
     deload,
     skipLabel: skipLabel(skip),
     activities,
+    sessions,
     allActivities,
     anyMoved: Object.values(moved).some(Boolean) || allActivities.length > 0 || Boolean(skip),
-    isTrainingDay: Object.values(slots).some(Boolean) || activities.length > 0,
+    isTrainingDay: skip
+      ? Object.values(slots).some(Boolean)
+      : Object.values(slots).some(Boolean) || activities.length > 0,
   };
 }
 
@@ -163,7 +184,9 @@ function toDate(value) {
  * A test moves off its calculated day the same way a session does:
  * overrides[day]["test:<id>"] = true | false.
  */
-export function resolveTesting(date, overrides, program) {
+export function resolveTesting(date, overrides, programOrFn) {
+  // Accepts a resolver, like resolveSchedule — see the note there.
+  const program = typeof programOrFn === "function" ? programOrFn(date) : programOrFn;
   const spec = program && program.testing;
   if (!spec || !Array.isArray(spec.items)) return [];
   const ov = (overrides && overrides[dateKey(date)]) || {};
@@ -225,6 +248,31 @@ function mapTask(e, opt) {
   };
 }
 
+/** Ids of the tasks a planned block's `cardio.*TaskId` fields name: duration, distance, average and max HR. */
+export const CARDIO_RESULT_KEYS = ["durationTaskId", "distanceTaskId", "hrAvgTaskId", "hrMaxTaskId"];
+
+/**
+ * One tick per planned cardio session. Tasks a block's `cardio.*TaskId` fields
+ * name are RESULT FIELDS: shown and editable, never counted (`resultField`).
+ * The block's session task — the first task that is not a number or notes
+ * field, e.g. `run-long` — is the one countable item. When the block declares
+ * a `durationTaskId` it is also done once a duration is logged (`viaTaskId`),
+ * unless the client has explicitly un-ticked it (`done[id] === false`).
+ * Blocks without a `cardio` declaration are untouched.
+ */
+function markCardioTasks(block, tasks) {
+  const c = block && block.cardio;
+  if (!c || typeof c !== "object") return tasks;
+  const ids = CARDIO_RESULT_KEYS.map((k) => c[k]).filter((v) => typeof v === "string");
+  if (!ids.length) return tasks;
+  const session = tasks.find((t) => t.type !== "number" && t.type !== "notes");
+  return tasks.map((t) => {
+    if (ids.includes(t.id) && t.type === "number") return { ...t, resultField: true };
+    if (session && t === session && typeof c.durationTaskId === "string") return { ...t, viaTaskId: c.durationTaskId };
+    return t;
+  });
+}
+
 /**
  * The day's task list.
  *
@@ -237,7 +285,11 @@ function mapTask(e, opt) {
  * Daily sections survive a skip: mobility, checks and nutrition still apply
  * when you are ill. Only training is removed.
  */
-export function buildSections(date, opts, program) {
+export function buildSections(date, opts, programOrFn) {
+  // Accepts a resolver, like resolveSchedule — see the note there. Resolved
+  // once here, so the resolveSchedule and resolveTesting calls below are
+  // handed the same programme object this day was built from.
+  const program = typeof programOrFn === "function" ? programOrFn(date) : programOrFn;
   const o = opts || {};
   const gentler = Boolean(o.gentler);
   const overrides = o.overrides || {};
@@ -252,8 +304,8 @@ export function buildSections(date, opts, program) {
   const opt = { gentler: isGentler, hrMax: hrMax };
 
   if (info.skip) {
-    const cleared =
-      program.slots.filter((s) => info.scheduled[s]).length + info.allActivities.length;
+    // Extras are no longer cleared by a skip, so only scheduled slots count.
+    const cleared = program.slots.filter((s) => info.scheduled[s]).length;
     sections.push({
       key: "skip",
       cat: "rest",
@@ -286,7 +338,7 @@ export function buildSections(date, opts, program) {
       noGym: Boolean(block.noGym),
       title: block.label,
       subtitle: isGentler ? block.gentlerNote || program.gentlerNote : block.subtitle || null,
-      tasks: block.exercises.map((e) => mapTask(e, opt)),
+      tasks: markCardioTasks(block, block.exercises.map((e) => mapTask(e, opt))),
     });
   }
 
@@ -368,6 +420,7 @@ export function isTaskDone(task, rec) {
     case "choice":
       return typeof rec.choices?.[task.id] === "string";
     default:
+      if (task.viaTaskId && rec.done?.[task.id] === undefined && typeof rec.numbers?.[task.viaTaskId] === "number") return true;
       return Boolean(rec.done?.[task.id]) || Boolean(rec.subs?.[task.id]?.name);
   }
 }
@@ -380,9 +433,9 @@ export function targetMet(task, rec) {
   return task.direction === "under" ? v <= task.target : v >= task.target;
 }
 
-/** Tasks that count toward the day's percentage — notes are excluded. */
+/** Tasks that count toward the day's percentage — notes and cardio result fields are excluded. */
 export function countableTasks(sections) {
-  return sections.flatMap((s) => s.tasks).filter((t) => t.type !== "notes");
+  return sections.flatMap((s) => s.tasks).filter((t) => t.type !== "notes" && !t.resultField);
 }
 
 /* ------------------------------- History --------------------------------- */
@@ -392,6 +445,10 @@ export function countableTasks(sections) {
  * percentages stay correct even after the program changes.
  */
 export function buildHistoryRows(log, overrides, program) {
+  // `program` may be a resolver: (date) -> program. Every day is then scored
+  // against the version in force on that day, which is the whole point —
+  // a day logged under Block 1 must not be re-scored against Block 2.
+  const programFor = typeof program === "function" ? program : () => program;
   return Object.keys(log)
     .sort()
     .map((dstr) => {
@@ -401,11 +458,12 @@ export function buildHistoryRows(log, overrides, program) {
       const weekType = rec.weekType || (getISOWeek(dateObj) % 2 === 0 ? "A" : "B");
       const gentler = Boolean(rec.gentler);
       const hrMax = rec.hrMax != null ? rec.hrMax : null;
+      const p = programFor(dateObj);
 
       const sections = buildSections(
         dateObj,
         { weekType: weekType, gentler: gentler, overrides: overrides, hrMax: hrMax, record: rec },
-        program
+        p
       );
 
       const byCat = {};
@@ -415,7 +473,7 @@ export function buildHistoryRows(log, overrides, program) {
         if (!sec.tasks.length) continue;
         if (!byCat[sec.cat]) byCat[sec.cat] = { total: 0, done: 0 };
         for (const task of sec.tasks) {
-          if (task.type === "notes") continue;
+          if (task.type === "notes" || task.resultField) continue;
           byCat[sec.cat].total += 1;
           total += 1;
           if (isTaskDone(task, rec)) {
@@ -425,7 +483,7 @@ export function buildHistoryRows(log, overrides, program) {
         }
       }
 
-      const info = resolveSchedule(dateObj, weekType, overrides, program);
+      const info = resolveSchedule(dateObj, weekType, overrides, p);
 
       return {
         date: dstr,
