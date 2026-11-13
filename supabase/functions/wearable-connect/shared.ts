@@ -15,7 +15,10 @@ export const VENDORS = {
   oura: {
     authorizeUrl: "https://cloud.ouraring.com/oauth/authorize",
     tokenUrl: "https://api.ouraring.com/oauth/token",
-    scopes: "daily workout personal",
+    // heartrate (added 13 Nov 2026): the time series a workout's average and
+    // maximum HR are computed from. Existing connections keep their old scopes
+    // until the person reconnects.
+    scopes: "daily workout personal heartrate",
     basicAuth: false,
   },
   polar: {

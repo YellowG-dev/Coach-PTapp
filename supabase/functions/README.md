@@ -7,9 +7,9 @@ change here does nothing until it is deployed.
 
 | Function | Deployed version | `verify_jwt` | Copy |
 |---|---|---|---|
-| `wearable-sync` | **8** (26 Oct 2026) | true | verbatim |
-| `wearable-connect` | 1 | true | verbatim |
-| `wearable-callback` | 2 | false | verbatim |
+| `wearable-sync` | **9** (13 Nov 2026) | true | verbatim |
+| `wearable-connect` | **2** (13 Nov 2026) | true | verbatim |
+| `wearable-callback` | 2 | false | verbatim (its `shared.ts` still has the pre-heartrate scope string, which it never reads) |
 | `wearable-cron` | 1 | false | verbatim **except the gate key, redacted** |
 | `wearable-probe` | 3 | — | not copied; its table is gone, deletion candidate |
 
@@ -19,6 +19,14 @@ change here does nothing until it is deployed.
   to `end + 2 days` (Oura's end date is exclusive). v8 (26 Oct) adds Polar sport
   ids 9 → `nordicWalking`, 11 → `walking`, 24 → `crossCountrySkiing`, each
   matched against the Oura session with the same start minute.
+- `wearable-sync` v9 and `wearable-connect` v2 (13 Nov 2026): Oura workout heart
+  rate. Oura's workout documents carry none, so v9 asks the `heartrate` series
+  for each real session's own time window and stores the average and maximum
+  (at least 3 samples, else nothing). The Oura scope string gains `heartrate`;
+  a connection made before that answers 401 and the sync carries on without HR
+  (`hr.unavailable` in the response) until the person reconnects. Oura rows no
+  longer write `hr_avg`/`hr_max` as null, so a re-sync never wipes a stored
+  value. `node test-oura-hr.mjs` runs the real source against a fake Oura.
 - `wearable-cron` must never be deployed from this copy: its key is a
   placeholder. The real key lives in the deployed function and in the body of
   the pg_cron job `wearable-nightly-sync` (`0 6,15 * * *` UTC).

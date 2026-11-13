@@ -42,6 +42,75 @@ async function ouraGet(path: string, token: string, start: string, end: string) 
   return rows;
 }
 
+/* ------------------------- Oura workout heart rate -------------------------- */
+// Oura's workout documents carry no heart rate (verified against the v2
+// OpenAPI spec, 13 Nov 2026: PublicWorkout has no HR field). Heart rate is a
+// separate time series, `heartrate`, behind its own `heartrate` scope, asked
+// for by start_datetime / end_datetime. Each real session's own time window is
+// fetched and reduced to an average and a maximum.
+//
+// >>> pure helpers (also exercised by test-oura-hr.mjs in the coach repo)
+
+// Same rule as isRealSession() in the client's cardio.js: sessions the person
+// started or entered always count; an auto-detected one counts once accepted,
+// unless it is housework and the like, and a walk only from 30 minutes.
+const HR_EXCLUDED_SPORTS = ["houseWork", "yardwork", "stretching", "other"];
+const HR_WALK_MIN_MINUTES = 30;
+function wantsHeartRate(w: { source: string | null; sport: string | null; duration_minutes: number | null }) {
+  if (w.source === "workout_heart_rate" || w.source === "manual") return true;
+  if (w.source !== "confirmed") return false;
+  if (w.sport && HR_EXCLUDED_SPORTS.includes(w.sport)) return false;
+  if (w.sport === "walking") return Number(w.duration_minutes) >= HR_WALK_MIN_MINUTES;
+  return true;
+}
+
+// Fewer than this many samples is not an average worth showing: outside a
+// recorded workout the ring samples roughly every five minutes.
+const HR_MIN_SAMPLES = 3;
+function summariseHeartRate(samples: { bpm?: unknown; timestamp?: unknown }[], startMs: number, endMs: number) {
+  const bpm: number[] = [];
+  for (const s of samples) {
+    const t = Date.parse(String(s.timestamp ?? ""));
+    const v = Number(s.bpm);
+    if (!Number.isFinite(t) || !Number.isFinite(v) || v <= 0) continue;
+    if (t < startMs || t > endMs) continue;
+    bpm.push(v);
+  }
+  if (bpm.length < HR_MIN_SAMPLES) return null;
+  return {
+    hr_avg: Math.round(bpm.reduce((a, b) => a + b, 0) / bpm.length),
+    hr_max: Math.round(Math.max(...bpm)),
+    samples: bpm.length,
+  };
+}
+// <<< pure helpers
+
+const HR_MAX_SESSIONS_PER_RUN = 150; // a 90-day backfill stays inside the function's time limit
+const HR_CONCURRENCY = 4;
+
+class OuraHrUnavailable extends Error {}
+
+async function ouraHeartRate(token: string, startIso: string, endIso: string) {
+  const rows: { bpm?: unknown; timestamp?: unknown }[] = [];
+  let next: string | null = null;
+  do {
+    const url = new URL(`${OURA}/heartrate`);
+    url.searchParams.set("start_datetime", startIso);
+    url.searchParams.set("end_datetime", endIso);
+    if (next) url.searchParams.set("next_token", next);
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    const text = await res.text();
+    // 401/403: the connection was made before the heartrate scope was asked
+    // for (or the ring/subscription has no such data). Not a sync failure.
+    if (res.status === 401 || res.status === 403) throw new OuraHrUnavailable(`heartrate ${res.status}: ${text.slice(0, 200)}`);
+    if (!res.ok) throw new Error(`oura heartrate failed (${res.status}): ${text.slice(0, 300)}`);
+    const body = JSON.parse(text) as { data?: { bpm?: unknown; timestamp?: unknown }[]; next_token?: string | null };
+    if (Array.isArray(body.data)) rows.push(...body.data);
+    next = body.next_token ?? null;
+  } while (next);
+  return rows;
+}
+
 async function syncOura(userId: string, token: string, start: string, end: string) {
   // Oura's `sleep` collection filters on when a sleep STARTED but labels it
   // with the day it ENDED. The night that ends on `start` began the evening
@@ -120,9 +189,9 @@ async function syncOura(userId: string, token: string, start: string, end: strin
         day: (w.day as string) ?? isoDay(started),
         duration_minutes: ended ? Math.round(((+ended - +started) / 60000) * 10) / 10 : null,
         distance_km: metres != null ? Math.round((metres / 1000) * 100) / 100 : null,
-        // Oura's workout documents carry no average or maximum heart rate.
-        hr_avg: null,
-        hr_max: null,
+        // No hr_avg / hr_max here: Oura's workout documents carry none, and
+        // leaving the keys out means a re-sync never wipes a stored value.
+        // They are filled from the heartrate series below.
         raw: w,
         fetched_at: new Date().toISOString(),
       };
@@ -133,12 +202,66 @@ async function syncOura(userId: string, token: string, start: string, end: strin
     const { error } = await db.from("wearable_days").upsert(dayRows, { onConflict: "user_id,vendor,day" });
     if (error) throw new Error(`day upsert failed: ${error.message}`);
   }
-  if (workoutRows.length) {
+
+  // Heart rate for real sessions that have none stored yet. Best effort: the
+  // workouts are saved whatever happens here.
+  const hr = { filled: 0, no_data: 0, skipped: 0, unavailable: null as string | null, error: null as string | null };
+  const hrById: Record<string, { hr_avg: number; hr_max: number }> = {};
+  try {
+    const wanted = workoutRows.filter((r) => r.duration_minutes != null && r.duration_minutes > 0 && wantsHeartRate(r));
+    const have = new Set<string>();
+    for (let i = 0; i < wanted.length; i += 200) {
+      const ids = wanted.slice(i, i + 200).map((r) => r.vendor_session_id);
+      const { data, error } = await db.from("wearable_workouts").select("vendor_session_id, hr_avg")
+        .eq("user_id", userId).eq("vendor", "oura").in("vendor_session_id", ids);
+      if (error) throw new Error(`hr lookup failed: ${error.message}`);
+      for (const d of data ?? []) if (d.hr_avg != null) have.add(d.vendor_session_id as string);
+    }
+    // Newest first, so a capped run fills the sessions people look at.
+    const todo = wanted.filter((r) => !have.has(r.vendor_session_id))
+      .sort((a, b) => (a.started_at < b.started_at ? 1 : -1));
+    hr.skipped = Math.max(0, todo.length - HR_MAX_SESSIONS_PER_RUN);
+    const queue = todo.slice(0, HR_MAX_SESSIONS_PER_RUN);
+    let stop = false;
+    const worker = async () => {
+      while (!stop) {
+        const r = queue.shift();
+        if (!r) return;
+        const startMs = Date.parse(r.started_at);
+        const endMs = startMs + Number(r.duration_minutes) * 60000;
+        try {
+          const samples = await ouraHeartRate(
+            token,
+            new Date(startMs).toISOString().replace("Z", "+00:00"),
+            new Date(endMs).toISOString().replace("Z", "+00:00"),
+          );
+          const sum = summariseHeartRate(samples, startMs, endMs);
+          if (sum) { hrById[r.vendor_session_id] = { hr_avg: sum.hr_avg, hr_max: sum.hr_max }; hr.filled++; }
+          else hr.no_data++;
+        } catch (e) {
+          stop = true;
+          if (e instanceof OuraHrUnavailable) hr.unavailable = String(e.message);
+          else hr.error = String(e).slice(0, 300);
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: HR_CONCURRENCY }, worker));
+  } catch (e) {
+    hr.error = String(e).slice(0, 300);
+  }
+
+  // Two batches, because every row in one upsert must carry the same columns:
+  // rows with a heart rate write it, rows without leave the stored value alone.
+  const withHr = workoutRows.filter((r) => hrById[r.vendor_session_id])
+    .map((r) => ({ ...r, ...hrById[r.vendor_session_id] }));
+  const withoutHr = workoutRows.filter((r) => !hrById[r.vendor_session_id]);
+  for (const batch of [withoutHr, withHr]) {
+    if (!batch.length) continue;
     const { error } = await db.from("wearable_workouts")
-      .upsert(workoutRows, { onConflict: "user_id,vendor,vendor_session_id" });
+      .upsert(batch, { onConflict: "user_id,vendor,vendor_session_id" });
     if (error) throw new Error(`workout upsert failed: ${error.message}`);
   }
-  return { days: dayRows.length, workouts: workoutRows.length };
+  return { days: dayRows.length, workouts: workoutRows.length, hr };
 }
 
 /* --------------------------------- Polar ---------------------------------- */
