@@ -240,11 +240,18 @@ function mapTask(e, opt) {
     target: e.target != null ? e.target : null,
     direction: e.direction || null,
     options: e.options || null,
+    // A choice task with `multi: true` lets several options be picked. They are
+    // stored as ONE comma-joined string ("nightly,cooldown") so every existing
+    // reader — isTaskDone, history, the coach dashboard — still sees a string.
+    multi: e.multi === true,
     countId: e.countId || null,
     countUnit: e.countUnit || null,
     countLabel: e.countLabel || null,
     zeroOption: e.zeroOption || null,
     scale: e.scale || null,
+    // Only a daily task that declares it carries `auto` (see stepsAutoTicks);
+    // every other task maps exactly as before, with no new key.
+    ...(e.auto ? { auto: e.auto } : {}),
   };
 }
 
@@ -433,6 +440,32 @@ export function targetMet(task, rec) {
   return task.direction === "under" ? v <= task.target : v >= task.target;
 }
 
+/**
+ * Steps auto-tick (decided 7 Oct 2026, D11). The ids of the tasks in `sections`
+ * — a buildSections() result for one day — that the day's step count ticks:
+ * every task with `auto.source === "steps"` whose `min` is met, and only when
+ * the day's log has never recorded that task (`rec.done[id] === undefined`).
+ *
+ * That last rule is what keeps a manual un-tick: toggleTask writes `false`, so
+ * a task the client un-ticked is never re-ticked, and a `true` is left alone.
+ * The same "transition only" idea as the strength auto-tick. It never returns a
+ * task to un-tick. `steps` that is not a finite number means "unknown", never 0.
+ */
+export function stepsAutoTicks(sections, rec, steps) {
+  if (typeof steps !== "number" || !Number.isFinite(steps)) return [];
+  const out = [];
+  for (const sec of sections || []) {
+    for (const task of (sec && sec.tasks) || []) {
+      const a = task && task.auto;
+      if (!a || a.source !== "steps" || typeof a.min !== "number") continue;
+      if (steps < a.min) continue;
+      if (rec?.done?.[task.id] !== undefined) continue;
+      if (!out.includes(task.id)) out.push(task.id);
+    }
+  }
+  return out;
+}
+
 /** Tasks that count toward the day's percentage — notes and cardio result fields are excluded. */
 export function countableTasks(sections) {
   return sections.flatMap((s) => s.tasks).filter((t) => t.type !== "notes" && !t.resultField);
@@ -599,14 +632,20 @@ export function computeRollingTotal(rows, id, options) {
   });
 }
 
-/** Heaviest logged set per session, for the strength progression chart. */
+/**
+ * Heaviest logged set per session, for the strength progression chart.
+ * `exerciseId` may be one load key or an array of keys that are the same
+ * movement (see groupLoadKeysByName); a day logged under more than one of them
+ * counts once, at its heaviest set.
+ */
 export function computeLoadSeries(log, exerciseId, excludeDate) {
+  const ids = Array.isArray(exerciseId) ? exerciseId : [exerciseId];
   return Object.keys(log)
     .sort()
     .filter((dstr) => dstr !== excludeDate)
     .map((dstr) => {
-      const loads = log[dstr]?.loads?.[exerciseId];
-      if (!loads) return null;
+      const loads = ids.flatMap((id) => log[dstr]?.loads?.[id] || []);
+      if (!loads.length) return null;
       const weights = loads.map((e) => (typeof e === "number" ? e : e?.w)).filter((w) => w != null);
       if (!weights.length) return null;
       const parts = dstr.split("-").map(Number);
@@ -661,4 +700,31 @@ export function labelForLoadKey(key, baseNameFor) {
   if (i === -1) return baseNameFor ? baseNameFor(key) : key;
   const slug = key.slice(i + 2).replace(/-/g, " ");
   return slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+/**
+ * One Progress-dropdown entry per movement, not per load key. The same lift is
+ * logged under several keys when it sits in more than one block (up-1 and fb-1
+ * are both "Incline dumbbell press") or arrives as a swap
+ * ("press-closegrip-db::overhead-triceps-extension"). Keys whose names match
+ * once slugified are one movement. Display only: no log data moves, and
+ * exercise ids keep their meaning. The label prefers a programme name over a
+ * swap slug, because the programme spelling is the one the lifter knows.
+ * Returns [{ id, name, keys }] sorted by name; `id` is "name:<slug>".
+ */
+export function groupLoadKeysByName(keys, baseNameFor) {
+  const groups = new Map();
+  for (const key of keys) {
+    const name = labelForLoadKey(key, baseNameFor);
+    const id = "name:" + slugify(name);
+    const g = groups.get(id);
+    if (!g) groups.set(id, { id, name, keys: [key], fromSwap: key.includes("::") });
+    else {
+      g.keys.push(key);
+      if (g.fromSwap && !key.includes("::")) { g.name = name; g.fromSwap = false; }
+    }
+  }
+  return [...groups.values()]
+    .map(({ id, name, keys: k }) => ({ id, name, keys: k.sort() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
