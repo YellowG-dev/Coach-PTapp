@@ -319,9 +319,50 @@ export function standardSlotSpec(id) {
   return { id: s.id, label: s.label, color: s.color };
 }
 
-/** Standard slot, by id: the picker's common case. */
+/** Every task id in a definition: block exercises, daily tasks (and byDayType variants), mobility, testing. */
+function taskIdsIn(def) {
+  const ids = new Set();
+  const add = (t) => t && typeof t.id === "string" && ids.add(t.id);
+  eachExercise(def, add);
+  const daily = Array.isArray(def && def.daily) ? def.daily : [];
+  daily.forEach((sec) => {
+    ((sec && sec.tasks) || []).forEach(add);
+    Object.values((sec && sec.byDayType) || {}).forEach((v) => ((v && v.tasks) || []).forEach(add));
+  });
+  (Array.isArray(def && def.mobility) ? def.mobility : []).forEach(add);
+  const tests = def && def.testing && Array.isArray(def.testing.items) ? def.testing.items : [];
+  tests.forEach((it) => ((it && it.tasks) || []).forEach(add));
+  return ids;
+}
+
+/**
+ * Standard slot, by id: the picker's common case. When the catalogue entry
+ * carries block templates (`blocks`, only Ski today) they are written into
+ * `blocks[id]`, with one picker option per block after "None". A slot without a
+ * template is added empty, exactly as before.
+ *
+ * Task ids are permanent and never reused, so if any template task id already
+ * exists anywhere in the programme this throws, naming the id, and nothing is
+ * added.
+ */
 export function addStandardSlot(def, id) {
-  return addSlot(def, standardSlotSpec(id));
+  const out = addSlot(def, standardSlotSpec(id));
+  const template = STANDARD_SLOTS.find((x) => x.id === id).blocks;
+  if (!template || typeof template !== "object") return out;
+  const existing = taskIdsIn(def);
+  for (const b of Object.values(template)) {
+    for (const e of b.exercises || []) {
+      if (existing.has(e.id)) {
+        throw new Error(`Task id ${e.id} already exists in this programme — ids are permanent and never reused, so the ${id} template cannot be added`);
+      }
+    }
+  }
+  out.blocks[id] = clone(template);
+  out.slotOptions[id] = [
+    ...out.slotOptions[id],
+    ...Object.entries(template).map(([key, b]) => ({ label: b.label, value: key })),
+  ];
+  return out;
 }
 
 /* -------------------------------- 3b: blocks ------------------------------- */
@@ -433,7 +474,7 @@ export function setCardioTypes(def, types) {
 }
 
 /**
- * The "Use standard cardio types" button: Run, Walk, Bike, Swim and Cardio from
+ * The "Use standard cardio types" button: Run, Walk, Bike, Swim, Cardio and Ski from
  * the catalogue. Each is linked to its slot when the programme has that slot,
  * otherwise extras-only. Types the programme already has are kept as they are
  * (matched by id), so pressing the button never overwrites the coach's edits.

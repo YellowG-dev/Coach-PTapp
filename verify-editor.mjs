@@ -613,8 +613,8 @@ check("every fixture programme starts valid (so any error below is the edit's)",
 check("availableStandardSlots lists the catalogue slots the programme lacks, in catalogue order", () => {
   const henna = baseOf(ID.henna);
   assert.deepStrictEqual(henna.slots, ["strength", "yoga"]);
-  assert.deepStrictEqual(availableStandardSlots(henna).map((s) => s.id), ["run", "walk", "swim", "bike", "cardio"]);
-  assert.deepStrictEqual(availableStandardSlots(baseOf(ID.juha)).map((s) => s.id), ["run", "walk", "swim", "bike"]);
+  assert.deepStrictEqual(availableStandardSlots(henna).map((s) => s.id), ["run", "walk", "swim", "bike", "cardio", "ski"]);
+  assert.deepStrictEqual(availableStandardSlots(baseOf(ID.juha)).map((s) => s.id), ["run", "walk", "swim", "bike", "ski"]);
 });
 
 check("adding each standard slot to each fixture programme validates with 0 errors", () => {
@@ -624,8 +624,11 @@ check("adding each standard slot to each fixture programme validates with 0 erro
       assert.deepStrictEqual(errs(out), [], `${n} + ${s.id}`);
       assert.deepStrictEqual(out.slots, [...baseOf(pid).slots, s.id]);
       assert.deepStrictEqual(out.slotMeta[s.id], { label: s.label, color: s.color });
-      assert.deepStrictEqual(out.blocks[s.id], {});
-      assert.deepStrictEqual(out.slotOptions[s.id], [{ label: "None", value: null }]);
+      // A slot with a block template (Ski) is added with its blocks; every other
+      // standard slot is added empty, as before.
+      const keys = Object.keys(s.blocks || {});
+      assert.deepStrictEqual(Object.keys(out.blocks[s.id]), keys);
+      assert.deepStrictEqual(out.slotOptions[s.id], [{ label: "None", value: null }, ...keys.map((k) => ({ label: s.blocks[k].label, value: k }))]);
     }
   }
 });
@@ -728,14 +731,14 @@ check("the editor's Cardio target panel and cardio-type Slot list follow slotCou
 
 check("Use standard cardio types: Run, Walk, Bike, Swim, Cardio; linked only to slots the programme has; validates", () => {
   const henna = useStandardCardioTypes(baseOf(ID.henna));
-  assert.deepStrictEqual(henna.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio"]);
+  assert.deepStrictEqual(henna.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio", "ski"]);
   assert.ok(henna.cardioTypes.every((t) => t.slot === undefined), "Henna has none of those slots: extras-only");
   assert.deepStrictEqual(errs(henna), []);
   assert.deepStrictEqual(henna.cardioTypes.find((t) => t.id === "walk").sports, ["walking", "hiking"]);
 
   const ville = useStandardCardioTypes(baseOf(ID.ville));
   const slotOf = Object.fromEntries(ville.cardioTypes.map((t) => [t.id, t.slot]));
-  assert.deepStrictEqual(slotOf, { run: "run", walk: undefined, swim: undefined, bike: "bike", cardio: undefined });
+  assert.deepStrictEqual(slotOf, { run: "run", walk: undefined, swim: undefined, bike: "bike", cardio: undefined, ski: undefined });
   assert.deepStrictEqual(errs(ville), []);
 
   const withWalk = useStandardCardioTypes(addStandardSlot(baseOf(ID.henna), "walk"));
@@ -755,7 +758,7 @@ check("Use standard cardio types keeps the coach's existing types (by id) and ne
   const mine = setCardioTypes(baseOf(ID.henna), [{ id: "run", label: "My run", sports: ["running", "hiking"] }]);
   const out = useStandardCardioTypes(mine);
   assert.strictEqual(out.cardioTypes.find((t) => t.id === "run").label, "My run");
-  assert.deepStrictEqual(out.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio"]);
+  assert.deepStrictEqual(out.cardioTypes.map((t) => t.id), ["run", "walk", "swim", "bike", "cardio", "ski"]);
   assert.deepStrictEqual(useStandardCardioTypes(out).cardioTypes, out.cardioTypes);
 });
 

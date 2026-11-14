@@ -1,0 +1,20 @@
+ok   1: line reads 'Daily step target · 8,412 / 10,000 steps'
+ok   1: not ticked on screen
+ok   1: stored day has no chk-walk tick
+ok   1: no page errors
+ok   2: line reads 'Daily step target · 10,250 / 10,000 steps'
+ok   2: ticked on screen
+ok   2: tick written into the day log (done.chk-walk === true)
+ok   2: no page errors
+ok   4: tapping writes done.chk-walk === false
+ok   4: still un-ticked after a re-render (screen + store)
+ok   4: still un-ticked after a reload at 10,250 steps (screen + store)
+ok   4: the steps line still shows
+ok   4: no page errors
+ok   3: line reads 'Daily step target · steps not synced yet'
+ok   3: nothing written (unknown is never 0)
+ok   3: no page errors
+ok   5: presc alone, no steps text
+ok   5: no page errors
+
+18 passed, 0 failed

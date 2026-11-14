@@ -1,0 +1,15 @@
+ok   the Add slot picker offers Ski (Ville lacks walk, swim, cardio, ski)
+ok   Ski appears in the library
+ok   the Ski swatch is #B5DDF2
+ok   the three template blocks show under Ski: XC-Classic, XC-Skate, Downhill
+ok   Ski is no longer offered once added
+ok   the Downhill block lists the session task and the four result fields
+ok   a Ski block shows the Cardio target panel (Ski counts as cardio)
+ok   Check is enabled once there are changes
+ok   Check passes: Publish is offered and nothing is blocking
+ok   the change list names the new slot and its blocks
+ok   Use standard cardio types adds six types, Ski linked to the ski slot
+ok   Check still passes with the cardio types
+ok   no page errors
+
+13 passed, 0 failed
