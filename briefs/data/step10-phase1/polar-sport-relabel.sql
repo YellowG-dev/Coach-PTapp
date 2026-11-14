@@ -2,11 +2,15 @@
 --
 -- WRITES. Run once in the Supabase SQL Editor. Not run by a cloud session.
 -- Independent of the Phase 1 code: wearable-sync v8 (deployed 26 Oct 2026)
--- already writes these names for new sessions. This fixes the 7 rows stored
+-- already writes these names for new sessions. This fixes the rows stored
 -- before v8, which are outside the sync window and would never be rewritten.
 --
+-- Revised 14 Nov 2026: the 14 Oct polar:24 row was still inside the sync
+-- window when v8 shipped and was rewritten to crossCountrySkiing by the sync
+-- itself. 6 rows remain: polar:24 3 (10, 12, 13 Oct), polar:11 2, polar:9 1.
+--
 -- Mapping, each matched against the Oura workout with the same start minute:
---   polar:24 -> crossCountrySkiing   4/4  (10, 12, 13, 14 Oct)
+--   polar:24 -> crossCountrySkiing   4/4  (10, 12, 13 Oct; 14 Oct already done by v8)
 --   polar:11 -> walking              2/2  (10, 11 Oct)
 --   polar:9  -> nordicWalking        1/1  (13 Oct)
 --
@@ -17,7 +21,7 @@
 -- file does not touch day_overrides.
 --
 -- Guard: changes nothing, with a NOTICE, unless exactly these rows exist —
--- 4 / 2 / 1 for Ville and no polar:24/11/9 rows for anyone else.
+-- 3 / 2 / 1 for Ville and no polar:24/11/9 rows for anyone else.
 
 do $$
 declare
@@ -41,7 +45,7 @@ begin
   from public.wearable_workouts
   where vendor = 'polar' and sport in ('polar:24', 'polar:11', 'polar:9') and user_id <> ville;
 
-  if n24 <> 4 or n11 <> 2 or n9 <> 1 or others <> 0 then
+  if n24 <> 3 or n11 <> 2 or n9 <> 1 or others <> 0 then
     raise notice 'Not the expected state (polar:24=%, polar:11=%, polar:9=%, other users=%): nothing changed',
       n24, n11, n9, others;
     return;

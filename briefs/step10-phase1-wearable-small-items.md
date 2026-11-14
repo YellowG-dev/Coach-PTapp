@@ -1,24 +1,52 @@
 # Brief — Step 10 Phase 1: wearable small items
 
-Drafted and approved 26 Oct 2026 in chat. Status: **ready to run**.
+Drafted and approved 26 Oct 2026 in chat. **Refreshed 14 Nov 2026** against
+fresh clones and the live database (§0 lists what changed). Status: **ready to run**.
 Repos: **Henna, Joonatan, Ville, Juha, Coach** (all five).
-**Takes the shared `app.jsx` lock** (verified free 26 Oct: no client branch is
-ahead of `main`).
+**Takes the shared `app.jsx` lock** (verified free 14 Nov: no unmerged client
+branch touches `src/app.jsx`).
 
-Starting point, verified 26 Oct 2026 on fresh clones:
+Starting point, verified 14 Nov 2026 on fresh clones:
 
 | Repo | `main` | Version |
 |---|---|---|
-| Henna | `b5f78d2` | 5.9.1-beta1 |
-| Joonatan | `949a693` | 5.9.1-beta1 |
-| Ville | `79e1391` | 5.9.1-beta1 |
-| Juha | `edb19df` | 5.9.1-beta1 |
-| Coach | this brief's commit | 0.12.2 |
+| Henna | `5e62427` | 5.9.6-beta1 |
+| Joonatan | `18599be` | 5.9.6-beta1 |
+| Ville | `cca85dc` | 5.9.6-beta1 |
+| Juha | `d2957aa` | 5.9.6-beta1 |
+| Coach | this brief's commit (on `0a76f13`) | 0.12.2 |
 
-Shared md5 at the start: `program-schema.js` `45f9bf18` (5), `cardio.js`
-`6c67a07e` (5), `engine.js` `ea50d30f` (4 clients) / `29523890` (Coach),
+Shared md5 at the start: `program-schema.js` `ff5441ee` (5), `cardio.js`
+`b2bf0cfd` (5), `engine.js` `0d0032a4` (4 clients) / `29523890` (Coach),
 `categories.jsx` `5cd5a31a` (4), `wearables.js` `0378af25` (4); `app.jsx`
-sha256 `f927ced9…` (4).
+md5 `dfd070d0` (4).
+
+Gates on `main`, 14 Nov: every `test-*.mjs` and `verify*.mjs` passes in all
+five repos except `verify-wearables.mjs` (`17 passed, 2 failed` in all 4
+clients — the time bomb A2 fixes). Coach `verify-render.mjs` not run (bundled
+only).
+
+## 0. What changed since 26 Oct (read before §1)
+
+- **5.9.5-beta1** (notes survive a reload; new gate `test-notes.mjs`) and
+  **5.9.6-beta1** (a planned block may list its own watch sports in
+  `blocks[slot][key].cardio.sports`; new gate `test-block-sports.mjs`) are on
+  `main` in all 4 clients. `app.jsx`, `cardio.js`, `program-schema.js` and
+  `engine.js` all changed; the anchors this brief names
+  (`confirmPlannedWorkout`, `pullAndMerge`, `queueLogDay`, `programForDate`,
+  `buildRecovery`, `addStandardSlot`) were re-checked 14 Nov and still exist.
+- **`KNOWN_SPORTS` already holds `crossCountrySkiing` and `nordicWalking`**
+  (added in 5.9.6). B1's bullet for that is done — do not add them twice.
+- `wearable-sync` **v9** (Oura workout heart rate) and `wearable-connect` **v2**
+  are deployed and their sources are in `supabase/functions/`. Still leave that
+  folder alone.
+- The client `engine.js` is still a superset of Coach's: it adds
+  `groupLoadKeysByName`, the array-key strength series and `multi` on choice
+  tasks. **Re-verified 14 Nov:** every Coach gate passes with the client file
+  in place.
+- Live programmes now: `juha-2026-11-14` (fp `40001ef9`), `henna-2026-10-07`
+  (`a9aa68b7`), `joonatan-2026-11-01` (`57f85635`), `ville-2026-10-12`
+  (`ce816d2f`). §6 builds from these.
 
 ---
 
@@ -54,10 +82,10 @@ sha256 `f927ced9…` (4).
 ### A — Housekeeping
 
 **A1. Coach `engine.js` back in line.** Copy the client `src/core/engine.js`
-(md5 `ea50d30f`) over Coach's (`29523890`). Verified 26 Oct: the client file
+(md5 `0d0032a4`) over Coach's (`29523890`). Verified 26 Oct and again 14 Nov: the client file
 is a superset — it adds `groupLoadKeysByName` and makes the strength-load series
 accept one key or an array of keys; a single key behaves as before. Chat ran
-every Coach gate with the client file in place on 26 Oct: all pass. Do this
+every Coach gate with the client file in place on 26 Oct and 14 Nov: all pass. Do this
 first; C2 then edits the one shared file.
 
 **A2. Fix the `verify-wearables.mjs` time bomb (4 clients).** On today's `main`
@@ -79,9 +107,9 @@ an app defect.
   Colour chosen 26 Oct: nearest existing slot/category colour is Cardio
   `#4CB6C4` at CIE76 ΔE 24.7 (≥ 20, the Phase 6 rule); contrast 13:1 against
   the dark text. Re-check it the way Phase 6 did and report the number.
-- Add `"crossCountrySkiing"` and `"nordicWalking"` to `KNOWN_SPORTS` (both
-  observed in `wearable_workouts`, 10–14 Oct).
-- Update the catalogue comment ("The seven slots…" → eight; dated 26 Oct).
+- `KNOWN_SPORTS` already contains `"crossCountrySkiing"` and `"nordicWalking"`
+  (5.9.6). No change; a test asserts they are there.
+- Update the catalogue comment ("The seven slots…" → eight; dated 26 Oct, built 14 Nov).
 - `blocks` is a new, **optional** catalogue field: block templates written into
   a programme when the slot is added. Only Ski has one now.
 
@@ -104,7 +132,9 @@ Each block:
   5. `ski-hr-max` · "Max heart rate" · `type: "number"`, `unit: "bpm"`, `presc: "From your watch"`.
 - `cardio: { durationTaskId: "ski-dur", distanceTaskId: "ski-dist", hrAvgTaskId: "ski-hr-avg", hrMaxTaskId: "ski-hr-max" }`.
   **No** targets (`durationMin`, zones, `note`): the coach sets those per
-  client. The result ids are shared across the three blocks, as Ville's
+  client. **No** `cardio.sports` list on the template blocks either (5.9.6
+  field): without one, a block matches through the slot's `cardioTypes`, which
+  is what we want until a downhill code and a classic/skate split are seen. The result ids are shared across the three blocks, as Ville's
   `run-dur` is.
 
 **B3. Coach editor (`src/core/editor.js`).**
@@ -191,6 +221,9 @@ In every repo, from a fresh `npm install`:
 - `verify-wearables.mjs` now ends `0 failed` in all 4 clients (A2);
 - `npm run build` succeeds; a second build is byte-identical to the first.
 
+The required gates now include `test-block-sports.mjs` and `test-notes.mjs`
+(both added since 26 Oct; see each repo's CLAUDE.md).
+
 `verify-otp.mjs` is browser-timed and failed once in Henna on 26 Oct, then
 passed on a rerun. One rerun is allowed for it; report if it fails twice.
 
@@ -228,9 +261,9 @@ passed on a rerun. One rerun is allowed for it; report if it fails twice.
 
 Forward-dated versions, built from the version in force, one per effective
 date:
-- **Juha** (from `juha-2026-10-12`): `chk-walk` gains `auto: { source: "steps", min: 10000 }`. Nothing else
+- **Juha** (from `juha-2026-11-14`, fp `40001ef9`): `chk-walk` gains `auto: { source: "steps", min: 10000 }`. Nothing else
   changes (item H comes later and builds from this one).
-- **Henna** (from `henna-2026-10-07`): `steps` gains `auto: { source: "steps", min: 7000 }` and is
+- **Henna** (from `henna-2026-10-07`, fp `a9aa68b7`): `steps` gains `auto: { source: "steps", min: 7000 }` and is
   renamed "Walk 7,000 steps".
 - Guarded `.sql`, fingerprint-verified after.
 
