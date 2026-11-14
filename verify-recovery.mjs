@@ -186,29 +186,48 @@ ok("a day with a reading from neither vendor stays absent — never zero, never 
   assert.equal(buildRecovery([], [], VILLE), null, "no data at all gives nothing to render");
 });
 
+// Fixed clock for the session checks: buildRecovery takes its 30-day cutoff
+// from `now`, so a test dated "today" could not be checked against a fixed
+// boundary, and a fixed date without `now` would expire.
+const NOW = new Date("2026-09-28T12:00:00");
+
 ok("only deliberate training counts as a session, and the collapse did not disturb that", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = "2026-09-27";
   const workouts = [
     { vendor: "oura", source: "confirmed", sport: "houseWork", day: today, duration_minutes: 20 },
     { vendor: "oura", source: "workout_heart_rate", sport: "strengthTraining", day: today, duration_minutes: 75 },
     { vendor: "polar", source: null, sport: "running", day: today, duration_minutes: 40 },
   ];
   assert.equal(isRealSession(workouts[0]), false);
-  const r = buildRecovery([row("2026-09-27", "oura", VILLE)], workouts, VILLE);
+  const r = buildRecovery([row("2026-09-27", "oura", VILLE)], workouts, VILLE, NOW);
   assert.equal(r.sessions30, 2, "housework is not training");
   assert.equal(r.sessionMinutes30, 115);
   assert.deepEqual(r.bySport.map((s) => s.sport), ["strengthTraining", "running"]);
 });
 
 ok("confirmed Oura sports count, confirmed housework and short walks do not (rule of 29 Sep 2026)", () => {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = "2026-09-27";
   const run = { vendor: "oura", source: "confirmed", sport: "running", day: today, duration_minutes: 49 };
   const chores = { vendor: "oura", source: "confirmed", sport: "houseWork", day: today, duration_minutes: 16 };
   assert.equal(isRealSession(run), true, "a confirmed 49-min run counts");
   assert.equal(isRealSession(chores), false, "a confirmed 16-min housework does not");
-  const r = buildRecovery([row("2026-09-27", "oura", VILLE)], [run, chores], VILLE);
+  const r = buildRecovery([row("2026-09-27", "oura", VILLE)], [run, chores], VILLE, NOW);
   assert.equal(r.sessions30, 1);
   assert.equal(r.sessionMinutes30, 49);
+});
+
+ok("the 30-day session window follows `now`, not the wall clock", () => {
+  const run = (day) => ({ vendor: "polar", source: null, sport: "running", day, duration_minutes: 30 });
+  const nights = [row("2026-09-27", "oura", VILLE)];
+  // NOW is 28 Sep: the cutoff is 29 Aug. 29 Aug is in, 28 Aug is out.
+  const r = buildRecovery(nights, [run("2026-08-29"), run("2026-08-28"), run("2026-09-27")], VILLE, NOW);
+  assert.equal(r.sessions30, 2, "day 30 stays in, day 31 drops out");
+  assert.equal(r.sessionMinutes30, 60);
+  assert.equal(r.nights, 1, "nights do not depend on `now`");
+  // Leaving `now` out still works and uses the real clock: a session dated
+  // today always counts.
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(buildRecovery(nights, [run(today)], VILLE).sessions30, 1, "default `now` is the current time");
 });
 
 console.log(`\n${checks - failures}/${checks} checks passed.`);

@@ -103,7 +103,7 @@ export function fmtNum(v, digits = 0, suffix = "") {
  * resolved by whatever order Postgres returned, and `avg7`/`avg30` averaged
  * that many array entries rather than that many days.
  */
-export function buildRecovery(days, workouts, subjectId = null) {
+export function buildRecovery(days, workouts, subjectId = null, now = new Date()) {
   const rows = collapseDays(days, subjectId); // one row per day, newest first
   if (!rows.length && !(workouts || []).length) return null;
 
@@ -126,7 +126,10 @@ export function buildRecovery(days, workouts, subjectId = null) {
     }));
 
   const sessions = (workouts || []).filter(isRealSession);
-  const cutoff = new Date();
+  // `now` sets only the 30-day session cutoff. Callers leave it out; tests pass
+  // a fixed date so their checks do not expire (same fix as the clients' A2,
+  // Step 10 Phase 1).
+  const cutoff = new Date(now);
   cutoff.setDate(cutoff.getDate() - 30);
   const cutoffKey = cutoff.toISOString().slice(0, 10);
   const recent = sessions.filter((w) => w.day >= cutoffKey);
